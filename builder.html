@@ -76,6 +76,9 @@
     }
     .drag-ghost {
       opacity: 0.4;
+      border: 2px dashed #d1d5db;
+    }
+    .dark .drag-ghost {
       border: 2px dashed var(--border-color);
     }
     .dragging {
@@ -142,7 +145,7 @@
     }
     .dark .tab-btn {
       border:2px solid var(--border-color);
-      border-bottom:none;
+      border-bottom-color: var(--border-color);
       background-color: var(--terminal-bg);
       color: var(--text-color);
       text-shadow:0 0 5px rgba(122,255,122,0.5);
@@ -184,31 +187,18 @@
       to { clip-path:inset(0 0 0 0); }
     }
 
-    /* Tab content shimmer effect */
-    .tab-content { position:relative; }
-    .tab-content.shimmer {
-      animation:crt-shimmer 0.15s steps(2,end) 6;
-    }
-    .tab-content.shimmer::after {
-      content:""; position:absolute; inset:0; pointer-events:none;
-      background:repeating-linear-gradient(0deg,rgba(255,255,255,0.03) 0,rgba(255,255,255,0.03) 1px,rgba(0,0,0,0.03) 1px,rgba(0,0,0,0.03) 2px);
-      opacity:0.4; mix-blend-mode:screen;
-      animation:static-noise 0.2s steps(2,end) infinite;
-    }
-    @keyframes crt-shimmer {
-      0% { transform:translate(0,0) rotate(0deg); }
-      20% { transform:translate(-2px,1px) rotate(-0.5deg); }
-      40% { transform:translate(1px,-1px) rotate(0.5deg); }
-      60% { transform:translate(-3px,2px) rotate(-1deg); }
-      80% { transform:translate(2px,-2px) rotate(1deg); }
-      100% { transform:translate(0,0) rotate(0deg); }
-    }
-    @keyframes static-noise {
-      0% { background-position:0 0; }
-      100% { background-position:100% -100%; }
-    }
-
-    .response-input { flex:0 0 61%; }
+      /* UI shake effect */
+      #builder-wrapper.shake {
+        animation:ui-shake 0.105s steps(2,end) 6;
+      }
+      @keyframes ui-shake {
+        0% { transform:translateX(0); }
+        20% { transform:translateX(-2px); }
+        40% { transform:translateX(2px); }
+        60% { transform:translateX(-3px); }
+        80% { transform:translateX(3px); }
+        100% { transform:translateX(0); }
+      }
   </style>
 </head>
 <body class="m-0 p-4">
@@ -325,12 +315,14 @@
       <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
         <input v-model="cmd.screen" class="border rounded p-1 w-32" placeholder="Screen ID">
-        <input v-model="cmd.command" class="border rounded p-1 response-input" placeholder="Response">
+        <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
-        <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="mr-1 action-btn" title="Move up">▲</button>
-        <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="mr-1 action-btn" title="Move down">▼</button>
+        <div class="flex gap-1">
+          <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="action-btn" title="Move up">▲</button>
+          <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="action-btn" title="Move down">▼</button>
           <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+        </div>
       </div>
       <button type="button" @click="addCommand" class="mt-2 action-btn">Add Command</button>
     </fieldset>
@@ -464,7 +456,18 @@ const app = Vue.createApp({
       return this.difficulties.map(d => `${d.name} (${d.length[0]}-${d.length[1]} letters, ${d.wordCount[0]}-${d.wordCount[1]} words)`).join('; ') + '; Random selects any difficulty.';
     }
   },
+  watch: {
+    textColor: 'applyTheme',
+    bgColor: 'applyTheme',
+    borderColor: 'applyTheme'
+  },
   methods: {
+      applyTheme() {
+        const root = document.documentElement;
+        root.style.setProperty('--text-color', this.textColor || DEFAULT_TEXT_COLOR);
+        root.style.setProperty('--terminal-bg', this.bgColor || DEFAULT_BG_COLOR);
+        root.style.setProperty('--border-color', this.borderColor || DEFAULT_BORDER_COLOR);
+      },
       addScreen(id='') {
         const text = this.textColor || DEFAULT_TEXT_COLOR;
         const bg = this.bgColor || DEFAULT_BG_COLOR;
@@ -729,6 +732,7 @@ const app = Vue.createApp({
     this.addScreen('menu');
     defaultDifficulties.forEach(d=>this.addDifficulty(d));
     this.$nextTick(this.initSortables);
+    this.applyTheme();
   }
 });
 
@@ -762,27 +766,34 @@ playSound('Pip/Boot/Boot1.wav');
 
 const burstSounds=Array.from({length:17},(_,i)=>`Pip/Burst Static/BurstStatic${String(i+1).padStart(2,'0')}.wav`);
 function playBurst(){ playSound(burstSounds[Math.floor(Math.random()*burstSounds.length)]); }
-function triggerTabEffect(){
-  playBurst();
-  const active=[...document.querySelectorAll('.tab-content')].find(el=>el.offsetParent!==null);
-  if(active){
-    active.classList.add('shimmer');
-    setTimeout(()=>active.classList.remove('shimmer'),900);
-  }
-}
+ function triggerTabEffect(){
+   playBurst();
+   wrapper.classList.add('shake');
+   setTimeout(()=>wrapper.classList.remove('shake'),630);
+ }
 
 const tabsBar=document.getElementById('tabs-bar');
 const tabButtons=[...tabsBar.querySelectorAll('button')];
 let currentTabIndex=0;
 tabButtons.forEach((btn,i)=>{
-  btn.addEventListener('mouseenter',()=>playSound('Pip/Highlight4.wav'));
-  btn.addEventListener('focus',()=>playSound('Pip/Highlight4.wav'));
   btn.addEventListener('click',()=>{
     if(i<currentTabIndex) playSound('Pip/RotaryVertical01.wav');
     else if(i>currentTabIndex) playSound('Pip/RotaryVertical03.wav');
     currentTabIndex=i;
     triggerTabEffect();
   });
+});
+
+document.addEventListener('mouseover',e=>{
+  const btn=e.target.closest('button');
+  if(!btn||btn.dataset.hoverSoundPlayed) return;
+  playSound('Pip/Highlight4.wav');
+  btn.dataset.hoverSoundPlayed='1';
+  btn.addEventListener('mouseleave',()=>delete btn.dataset.hoverSoundPlayed,{once:true});
+});
+document.addEventListener('focusin',e=>{
+  const btn=e.target.closest('button');
+  if(btn) playSound('Pip/Highlight4.wav');
 });
 
 triggerTabEffect();
