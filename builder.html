@@ -794,14 +794,14 @@ tabButtons.forEach((btn,i)=>{
 });
 
 document.addEventListener('mouseover',e=>{
-  const btn=e.target.closest('button');
+  const btn=e.target.closest('button, a.top-line-btn');
   if(!btn||btn.dataset.hoverSoundPlayed) return;
   playSound('Pip/Highlight4.wav');
   btn.dataset.hoverSoundPlayed='1';
   btn.addEventListener('mouseleave',()=>delete btn.dataset.hoverSoundPlayed,{once:true});
 });
 document.addEventListener('focusin',e=>{
-  const btn=e.target.closest('button');
+  const btn=e.target.closest('button, a.top-line-btn');
   if(btn) playSound('Pip/Highlight4.wav');
 });
 
@@ -818,14 +818,11 @@ darkToggle.addEventListener('click',()=>{
 });
 
 document.addEventListener('click',e=>{
-  const btn=e.target.closest('button');
+  const btn=e.target.closest('button, a.top-line-btn');
   if(!btn) return;
   if(btn.id==='dark-toggle' || btn.classList.contains('tab-btn')) return;
   playSound('Pip/select3.wav');
 });
-
-const backLink=document.querySelector('a[href="index.html"]');
-if(backLink){ backLink.addEventListener('click',()=>playSound('Pip/select3.wav')); }
 
 const passwordEl = document.getElementById('password');
 const dudWordsEl = document.getElementById('dud-words');
