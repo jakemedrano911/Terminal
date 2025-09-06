@@ -165,6 +165,28 @@
     .dark #tabs-bar { border-bottom:2px solid var(--border-color); }
     .dark a { color: var(--text-color); }
     .dark #generate-feedback { color: var(--text-color); }
+
+    /* Boot sequence reveal */
+    #builder-wrapper.boot-load {
+      overflow:hidden;
+      animation:boot-reveal 2s steps(25,end) forwards;
+      clip-path:inset(100% 0 0 0);
+    }
+    @keyframes boot-reveal {
+      to { clip-path:inset(0 0 0 0); }
+    }
+
+    /* Tab content shimmer effect */
+    .tab-content.shimmer {
+      animation:tab-shimmer 0.4s steps(2,end) 2;
+    }
+    @keyframes tab-shimmer {
+      0% { transform:translateX(0); }
+      25% { transform:translateX(-1px); }
+      50% { transform:translateX(1px); }
+      75% { transform:translateX(-1px); }
+      100% { transform:translateX(0); }
+    }
   </style>
 </head>
 <body class="m-0 p-4">
@@ -187,7 +209,7 @@
       <button type="button" @click="activeTab='hacking'" :class="['tab-btn', activeTab==='hacking' ? 'tab-btn-active' : '']">Hacking</button>
       <button type="button" @click="activeTab='prefs'" :class="['tab-btn', activeTab==='prefs' ? 'tab-btn-active' : '']">Preferences</button>
     </div>
-  <div v-show="activeTab==='content'" class="space-y-4">
+  <div v-show="activeTab==='content'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Enter the lines displayed at the top of the terminal. Each line becomes a separate title line. Example: 'ROBCO INDUSTRIES UNIFIED OPERATING SYSTEM'.">
       <legend class="flex items-center gap-1">Titles</legend>
       <textarea id="titles" rows="4" cols="50" class="w-full p-2 border rounded" placeholder="Each line becomes a title line" title="Each line becomes a title line, e.g., ROBCO INDUSTRIES UNIFIED OPERATING SYSTEM"></textarea>
@@ -245,7 +267,7 @@
       </div>
     </fieldset>
   </div>
-  <div v-show="activeTab==='boot'" class="space-y-4">
+  <div v-show="activeTab==='boot'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Boot Sequence</legend>
       <div v-for="(step, idx) in bootSequence" :key="step.uid" class="flex items-center flex-wrap gap-1 mb-1">
@@ -275,7 +297,7 @@
       <button type="button" @click="addBootStep(lockedBootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
   </div>
-  <div v-show="activeTab==='commands'" class="space-y-4">
+  <div v-show="activeTab==='commands'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Commands</legend>
       <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
@@ -291,7 +313,7 @@
       <button type="button" @click="addCommand" class="mt-2 action-btn">Add Command</button>
     </fieldset>
   </div>
-  <div v-show="activeTab==='hacking'" class="space-y-4">
+  <div v-show="activeTab==='hacking'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Configure hacking settings for locked terminals.">
       <legend class="flex items-center gap-1">Hacking</legend>
       <label class="block" title="If checked, the terminal starts locked and requires hacking before use."><input type="checkbox" id="locked" checked class="mr-1"> Locked</label>
@@ -338,7 +360,7 @@
         </fieldset>
     </fieldset>
   </div>
-  <div v-show="activeTab==='prefs'" class="space-y-4">
+  <div v-show="activeTab==='prefs'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Customize terminal appearance.">
       <legend class="flex items-center gap-1">Default Appearance</legend>
       <label class="block" title="Color of text displayed in the terminal, e.g., #7aff7a.">Default Text Color:
@@ -705,7 +727,62 @@ document.getElementById('config-file').addEventListener('change', e => {
     };
   reader.readAsText(file);
 });
-document.getElementById('dark-toggle').addEventListener('click', ()=> document.documentElement.classList.toggle('dark'));
+
+function playSound(src){
+  const a=new Audio(src);
+  a.play();
+  return a;
+}
+
+const wrapper=document.getElementById('builder-wrapper');
+wrapper.classList.add('boot-load');
+playSound('Pip/Boot/Boot1.wav');
+
+const burstSounds=Array.from({length:17},(_,i)=>`Pip/Burst Static/BurstStatic${String(i+1).padStart(2,'0')}.wav`);
+function playBurst(){ playSound(burstSounds[Math.floor(Math.random()*burstSounds.length)]); }
+function triggerTabEffect(){
+  playBurst();
+  const active=[...document.querySelectorAll('.tab-content')].find(el=>el.offsetParent!==null);
+  if(active){
+    active.classList.add('shimmer');
+    setTimeout(()=>active.classList.remove('shimmer'),400);
+  }
+}
+
+const tabsBar=document.getElementById('tabs-bar');
+const tabButtons=[...tabsBar.querySelectorAll('button')];
+let currentTabIndex=0;
+tabButtons.forEach((btn,i)=>{
+  btn.addEventListener('mouseenter',()=>playSound('Pip/Highlight4.wav'));
+  btn.addEventListener('focus',()=>playSound('Pip/Highlight4.wav'));
+  btn.addEventListener('click',()=>{
+    if(i<currentTabIndex) playSound('Pip/RotaryVertical01.wav');
+    else if(i>currentTabIndex) playSound('Pip/RotaryVertical03.wav');
+    currentTabIndex=i;
+    triggerTabEffect();
+  });
+});
+
+triggerTabEffect();
+
+const darkToggle=document.getElementById('dark-toggle');
+let darkToggleCount=0;
+darkToggle.addEventListener('click',()=>{
+  const isDark=document.documentElement.classList.toggle('dark');
+  if(isDark){
+    if(darkToggleCount>0) playSound('Pip/LightOff.wav');
+  }else{
+    playSound('Pip/LightOn.wav');
+  }
+  darkToggleCount++;
+});
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('button');
+  if(!btn) return;
+  if(btn.id==='dark-toggle' || btn.classList.contains('tab-btn')) return;
+  playSound('Pip/select3.wav');
+});
 
 const passwordEl = document.getElementById('password');
 const dudWordsEl = document.getElementById('dud-words');
