@@ -21,13 +21,19 @@
       --border-color:#008800;
     }
     body {
-      background-color: #f9fafb;
-      color: #000000;
+      background-color:#f9fafb;
+      color:#000;
+      font-family:"FSEX300","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
+      background-image:repeating-linear-gradient(
+        rgba(0,0,0,0.05) 0px,
+        rgba(0,0,0,0.05) 1px,
+        transparent 1px,
+        transparent 4px
+      );
     }
     .dark body {
       background:var(--terminal-bg);
       color:var(--text-color);
-      font-family:"FSEX300","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
       background-image:repeating-linear-gradient(
         rgba(0,0,0,0.55) 0px,
         rgba(0,0,0,0.55) 1px,
@@ -36,22 +42,22 @@
       );
     }
     fieldset {
-      background-color: #f3f4f6;
-      border-color: #d1d5db;
+      background-color:#f3f4f6;
+      border:2px solid #d1d5db;
     }
     .dark fieldset {
-      background-color: var(--terminal-bg);
+      background-color:var(--terminal-bg);
       border:2px solid var(--border-color);
     }
     input, textarea, select {
-      background-color: #f9fafb;
-      border-color: #d1d5db;
-      color: #000000;
+      background-color:#f9fafb;
+      border:2px solid #d1d5db;
+      color:#000;
     }
     .dark input, .dark textarea, .dark select {
-      background-color: transparent;
+      background-color:transparent;
       border:2px solid var(--border-color);
-      color: var(--text-color);
+      color:var(--text-color);
     }
     ::placeholder {
       color: #4b5563;
@@ -76,11 +82,11 @@
       user-select: none;
     }
       .action-btn {
-        border: 1px solid #9ca3af;
-        border-radius: 0.25rem;
-        padding: 0 0.25rem;
-        background-color: #f3f4f6;
-        color: #000000;
+        border:2px solid #9ca3af;
+        border-radius:0.25rem;
+        padding:0 0.25rem;
+        background-color:#f3f4f6;
+        color:#000;
       }
       .action-btn:hover {
         background-color: #e5e7eb;
@@ -114,6 +120,8 @@
     .dark .top-line-btn:hover {
       background-color:#0a1f0a;
     }
+    .delete-icon{ color:#000; }
+    .dark .delete-icon{ color:var(--text-color); }
 
     .tab-btn {
       padding: 0.25rem 0.5rem;
@@ -236,7 +244,7 @@
       <legend class="flex items-center gap-1">Screens</legend>
       <div id="screens-container">
         <template v-for="(screen, sIdx) in screens">
-          <div :key="screen.uid" class="screen mb-4 border border-l-4 rounded p-2 text-white" :style="{borderColor: screen.color, backgroundColor: screen.color}">
+            <div :key="screen.uid" class="screen mb-4 border border-l-4 rounded p-2" :style="{borderColor: screen.color, backgroundColor: screen.color, color: screen.textColor}">
             <div class="mb-2">
               <div class="flex flex-wrap items-center mb-2">
                 <button type="button" @click="screen.open = !screen.open" class="mr-2 action-btn" :aria-expanded="screen.open">{{screen.open ? '▼' : '►' }}</button>
@@ -245,7 +253,7 @@
                 <input type="text" v-model="screen.color" class="w-20 p-1 border rounded mr-2" title="Color is for organization only and does not affect terminal appearance">
                 <button type="button" @click="moveScreenUp(sIdx)" :disabled="sIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                 <button type="button" @click="moveScreenDown(sIdx)" :disabled="sIdx===screens.length-1" class="mr-1 action-btn" title="Move down">▼</button>
-                <button type="button" @click="removeScreen(sIdx)" class="action-btn" title="Remove screen"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+                  <button type="button" @click="removeScreen(sIdx)" class="action-btn" title="Remove screen"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
               </div>
               <div class="flex flex-wrap items-center">
                 <label class="flex items-center mr-2">Text:
@@ -264,13 +272,13 @@
             </div>
             <div v-show="screen.open" class="pl-6 items-container" :data-sidx="sIdx" :id="'items-'+screen.uid">
               <template v-for="(item, iIdx) in screen.items">
-                <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded text-white" :style="{backgroundColor: screen.color, borderColor: screen.color}">
+                <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded" :style="{backgroundColor: screen.color, borderColor: screen.color, color: screen.textColor}">
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
                   <input v-model="item.screen" class="menu-screen mr-1 border rounded p-1 w-24" placeholder="Screen id">
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
-                  <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+                    <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
                 </div>
               </template>
               <button type="button" @click="addMenuItem(screen)" class="mt-2 px-2 py-1 border rounded">Add Menu Item</button>
@@ -292,7 +300,7 @@
         </select>
         <button type="button" @click="moveBootStepUp(bootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
         <button type="button" @click="moveBootStepDown(bootSequence, idx)" :disabled="idx===bootSequence.length-1" class="action-btn">▼</button>
-        <button type="button" @click="removeBootStep(bootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+        <button type="button" @click="removeBootStep(bootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
       </div>
       <button type="button" @click="addBootStep(bootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
@@ -306,7 +314,7 @@
         </select>
         <button type="button" @click="moveBootStepUp(lockedBootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
         <button type="button" @click="moveBootStepDown(lockedBootSequence, idx)" :disabled="idx===lockedBootSequence.length-1" class="action-btn">▼</button>
-        <button type="button" @click="removeBootStep(lockedBootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+        <button type="button" @click="removeBootStep(lockedBootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
       </div>
       <button type="button" @click="addBootStep(lockedBootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
@@ -322,7 +330,7 @@
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
         <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="mr-1 action-btn" title="Move up">▲</button>
         <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="mr-1 action-btn" title="Move down">▼</button>
-        <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+          <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
       </div>
       <button type="button" @click="addCommand" class="mt-2 action-btn">Add Command</button>
     </fieldset>
@@ -362,7 +370,7 @@
               <div class="flex items-center mb-2">
                 <button type="button" @click="d.open = !d.open" class="mr-2 action-btn">{{ d.open ? '▼' : '►' }}</button>
                 <input v-model="d.name" class="diff-name mr-2 border rounded p-1" placeholder="Name">
-                <button type="button" @click="removeDifficulty(idx)" class="action-btn" title="Remove difficulty"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+                <button type="button" @click="removeDifficulty(idx)" class="action-btn" title="Remove difficulty"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
               </div>
               <div v-show="d.open" class="pl-6 space-y-1">
                 <label class="block">Words: <input type="number" v-model.number="d.wordCount[0]" class="word-min mr-1 border rounded p-1 w-16" min="1"> - <input type="number" v-model.number="d.wordCount[1]" class="word-max border rounded p-1 w-16" min="1"></label>
