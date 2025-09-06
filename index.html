@@ -88,18 +88,18 @@
     align-items:center;
     justify-content:flex-end;
   }
-  #power-container, #config-container, #pref-container{
+  #power-container, #config-container, #pref-container, #builder-container{
     position:relative;
     display:flex;
     flex-direction:column;
     align-items:center;
   }
   #controls-container span{color:var(--text-color);}
-  #pref-container{
+  #pref-container, #builder-container{
     display:flex;
     margin-bottom:calc(10px * var(--scale));
   }
-  #pref-container span{
+  #pref-container span, #builder-container span{
     margin-top:calc(5px * var(--scale));
   }
   #pref-menu{
@@ -162,7 +162,7 @@
     left:50%;
     transform:translateX(-50%);
   }
-  #power-button, #config-button, #pref-button{
+  #power-button, #config-button, #pref-button, #builder-button{
     background:#b3410e;
     color:var(--text-color);
     border:calc(2px * var(--scale)) solid var(--border-color);
@@ -171,9 +171,15 @@
     border-radius:0;
     font-size:calc(20px * var(--scale) * 0.9);
     cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
   #config-button{
     background:#b8b20d;
+  }
+  #builder-button{
+    background:#0d8f0d;
   }
   #config-file{display:none;}
   #terminal::before,
@@ -314,6 +320,10 @@
     </div>
   </div>
   <div id="controls-container">
+    <div id="builder-container">
+      <a id="builder-button" href="builder.html" aria-label="Builder">&#x1F527;</a>
+      <span>Builder</span>
+    </div>
     <div id="pref-container">
       <button id="pref-button" aria-label="Preferences">&#9881;</button>
       <span>Prefs</span>
@@ -346,7 +356,12 @@
       <span>Holotape</span>
     </div>
     <div id="power-container">
-      <button id="power-button" aria-label="Power">&#x23FB;</button>
+      <button id="power-button" aria-label="Power">
+        <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v10"/>
+          <path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>
+        </svg>
+      </button>
       <span>Power</span>
     </div>
   </div>
@@ -436,6 +451,37 @@ function trackAudio(audio){
   activeAudios.add(audio);
   audio.addEventListener('ended',()=>activeAudios.delete(audio));
   return audio;
+}
+
+const preloadedAudios=[];
+
+function preloadAudio(src){
+  const audio=new Audio(src);
+  audio.preload='auto';
+  preloadedAudios.push(audio);
+  return audio;
+}
+
+function playCachedAudio(audio,volume){
+  activeAudios.add(audio);
+  audio.currentTime=0;
+  audio.volume=volume;
+  audio.play();
+  audio.addEventListener('ended',()=>activeAudios.delete(audio),{once:true});
+}
+
+async function resumePreloadedAudio(){
+  for(const audio of preloadedAudios){
+    try{
+      audio.muted=true;
+      await audio.play();
+      audio.pause();
+      audio.muted=false;
+      audio.currentTime=0;
+    }catch(e){
+      console.warn('Preloaded audio resume failed',e);
+    }
+  }
 }
 function stopAllAudio(){
   for(const audio of activeAudios){
@@ -636,6 +682,26 @@ humSlider.addEventListener('input',()=>{
 scrollSlider.addEventListener('input',()=>{scrollVolume=scrollSlider.value/100;});
 focusSlider.addEventListener('input',()=>{focusVolume=focusSlider.value/100;});
 selectSlider.addEventListener('input',()=>{selectVolume=selectSlider.value/100;});
+const focusAudio=preloadAudio('Terminal 3/menu/menu_focus.wav');
+const charFocusAudios=[
+  'Terminal 3/single/charsingle_01.wav',
+  'Terminal 3/single/charsingle_02.wav',
+  'Terminal 3/single/charsingle_03.wav',
+  'Terminal 3/single/charsingle_04.wav',
+  'Terminal 3/single/charsingle_05.wav',
+  'Terminal 3/single/charsingle_06.wav'
+].map(preloadAudio);
+const wordFocusAudios=[
+  'Terminal 3/multiple/charmultiple_01.wav',
+  'Terminal 3/multiple/charmultiple_02.wav',
+  'Terminal 3/multiple/charmultiple_03.wav',
+  'Terminal 3/multiple/charmultiple_04.wav'
+].map(preloadAudio);
+const enterCharAudios=[
+  'Terminal 3/enter/charenter_01.wav',
+  'Terminal 3/enter/charenter_02.wav',
+  'Terminal 3/enter/charenter_03.wav'
+].map(preloadAudio);
 userSpeedSelect.value=String([58,75,91,100].includes(userBaseSpeed)?userBaseSpeed:75);
 compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
 userSpeedSelect.addEventListener('change',()=>{
@@ -1356,9 +1422,7 @@ function stopFanHum(){
 
 function playFocusSound(){
   if(!powered) return;
-  const audio=trackAudio(new Audio('Terminal 3/menu/menu_focus.wav'));
-  audio.volume=focusVolume;
-  audio.play();
+  playCachedAudio(focusAudio,focusVolume);
 }
 
 function playSelectSound(){
@@ -1397,45 +1461,20 @@ function playSelectSound(){
 
 function playCharFocusSound(){
   if(!powered) return;
-  const files=[
-    'Terminal 3/single/charsingle_01.wav',
-    'Terminal 3/single/charsingle_02.wav',
-    'Terminal 3/single/charsingle_03.wav',
-    'Terminal 3/single/charsingle_04.wav',
-    'Terminal 3/single/charsingle_05.wav',
-    'Terminal 3/single/charsingle_06.wav'
-  ];
-  const src=files[Math.floor(Math.random()*files.length)];
-  const audio=trackAudio(new Audio(src));
-  audio.volume=focusVolume;
-  audio.play();
+  const audio=charFocusAudios[Math.floor(Math.random()*charFocusAudios.length)];
+  playCachedAudio(audio,focusVolume);
 }
 
 function playWordFocusSound(){
   if(!powered) return;
-  const files=[
-    'Terminal 3/multiple/charmultiple_01.wav',
-    'Terminal 3/multiple/charmultiple_02.wav',
-    'Terminal 3/multiple/charmultiple_03.wav',
-    'Terminal 3/multiple/charmultiple_04.wav'
-  ];
-  const src=files[Math.floor(Math.random()*files.length)];
-  const audio=trackAudio(new Audio(src));
-  audio.volume=focusVolume;
-  audio.play();
+  const audio=wordFocusAudios[Math.floor(Math.random()*wordFocusAudios.length)];
+  playCachedAudio(audio,focusVolume);
 }
 
 function playEnterCharSound(){
   if(!powered) return;
-  const files=[
-    'Terminal 3/enter/charenter_01.wav',
-    'Terminal 3/enter/charenter_02.wav',
-    'Terminal 3/enter/charenter_03.wav'
-  ];
-  const src=files[Math.floor(Math.random()*files.length)];
-  const audio=trackAudio(new Audio(src));
-  audio.volume=selectVolume;
-  audio.play();
+  const audio=enterCharAudios[Math.floor(Math.random()*enterCharAudios.length)];
+  playCachedAudio(audio,selectVolume);
 }
 
 function playPasswordResult(correct){
@@ -1758,7 +1797,12 @@ document.addEventListener('keydown',e=>{
 });
 
 powerButton.addEventListener('click',async()=>{
-  await audioCtx.resume();
+  try{
+    await audioCtx.resume();
+    await resumePreloadedAudio();
+  }catch(e){
+    console.warn('Audio resume failed',e);
+  }
   if(!powered){
     currentCycle++;
     const cycle=currentCycle;

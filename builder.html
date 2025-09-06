@@ -9,21 +9,39 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
+    @font-face{
+      font-family:"FSEX300";
+      src:url("fonts/FSEX300.ttf") format("truetype");
+      font-weight:normal;
+      font-style:normal;
+    }
+    :root{
+      --text-color:#7aff7a;
+      --terminal-bg:#041204;
+      --border-color:#008800;
+    }
     body {
       background-color: #f9fafb;
       color: #000000;
     }
     .dark body {
-      background-color: #000000;
-      color: #f3f4f6;
+      background:var(--terminal-bg);
+      color:var(--text-color);
+      font-family:"FSEX300","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
+      background-image:repeating-linear-gradient(
+        rgba(0,0,0,0.55) 0px,
+        rgba(0,0,0,0.55) 1px,
+        transparent 1px,
+        transparent 4px
+      );
     }
     fieldset {
       background-color: #f3f4f6;
       border-color: #d1d5db;
     }
     .dark fieldset {
-      background-color: #1f2937;
-      border-color: #374151;
+      background-color: var(--terminal-bg);
+      border:2px solid var(--border-color);
     }
     input, textarea, select {
       background-color: #f9fafb;
@@ -31,16 +49,16 @@
       color: #000000;
     }
     .dark input, .dark textarea, .dark select {
-      background-color: #111827;
-      border-color: #374151;
-      color: #f3f4f6;
+      background-color: transparent;
+      border:2px solid var(--border-color);
+      color: var(--text-color);
     }
     ::placeholder {
       color: #4b5563;
       opacity: 1;
     }
     .dark ::placeholder {
-      color: #9ca3af;
+      color: rgba(122,255,122,0.5);
     }
     .screen, .menu-item, .difficulty-item {
       transition: transform 0.2s;
@@ -52,7 +70,7 @@
     }
     .drag-ghost {
       opacity: 0.4;
-      border: 2px dashed #34d399;
+      border: 2px dashed var(--border-color);
     }
     .dragging {
       user-select: none;
@@ -68,12 +86,13 @@
         background-color: #e5e7eb;
       }
       .dark .action-btn {
-        border-color: #4b5563;
-        background-color: #1f2937;
-        color: #f3f4f6;
+        border:2px solid var(--border-color);
+        background-color: var(--terminal-bg);
+        color: var(--text-color);
+        text-shadow:0 0 5px rgba(122,255,122,0.5);
       }
     .dark .action-btn:hover {
-      background-color: #374151;
+      background-color:#0a1f0a;
     }
     .top-line-btn {
       padding: 0.25rem 0.5rem;
@@ -87,12 +106,13 @@
       background-color: #e5e7eb;
     }
     .dark .top-line-btn {
-      border-color: #9ca3af;
-      background-color: #1f2937;
-      color: #f3f4f6;
+      border:2px solid var(--border-color);
+      background-color: var(--terminal-bg);
+      color: var(--text-color);
+      text-shadow:0 0 5px rgba(122,255,122,0.5);
     }
     .dark .top-line-btn:hover {
-      background-color: #374151;
+      background-color:#0a1f0a;
     }
 
     .tab-btn {
@@ -113,32 +133,54 @@
       margin-bottom: -2px;
     }
     .dark .tab-btn {
-      border-color: #9ca3af;
-      background-color: #1f2937;
-      color: #f3f4f6;
+      border:2px solid var(--border-color);
+      border-bottom:none;
+      background-color: var(--terminal-bg);
+      color: var(--text-color);
+      text-shadow:0 0 5px rgba(122,255,122,0.5);
+      border-radius:0;
     }
     .dark .tab-btn:hover {
-      background-color: #374151;
+      background-color:#0a1f0a;
     }
     .dark .tab-btn-active {
-      background-color: #111827;
-      border-bottom-color: transparent;
+      background-color:#0a1f0a;
+      border-bottom-color: var(--terminal-bg);
+      margin-bottom:-2px;
     }
+
+    .dark #builder-wrapper {
+      border:4px solid var(--border-color);
+      border-radius:12px;
+      padding:1rem;
+      background:var(--terminal-bg);
+      background-image:repeating-linear-gradient(
+        rgba(0,0,0,0.55) 0px,
+        rgba(0,0,0,0.55) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+      box-shadow:0 0 10px rgba(0,255,0,0.2);
+    }
+    .dark #tabs-bar { border-bottom:2px solid var(--border-color); }
+    .dark a { color: var(--text-color); }
+    .dark #generate-feedback { color: var(--text-color); }
   </style>
 </head>
-<body class="font-sans m-0 p-4">
-<div class="max-w-4xl mx-auto">
+<body class="m-0 p-4">
+<div id="builder-wrapper" class="max-w-4xl mx-auto">
 <h1 class="text-2xl font-bold mb-4">Config Builder</h1>
-<div class="mb-4 flex gap-2 items-center">
+<div class="mb-4 flex gap-2 items-center w-full">
   <button type="button" id="load-config" class="top-line-btn" title="Load configuration from a JSON file such as one previously exported.">Load Config</button>
   <button type="submit" form="builder-form" class="top-line-btn" title="Generate the configuration file and enable downloading config.json">Generate Config</button>
   <a id="download-link" class="hidden text-blue-600 underline" download="config.json">Download config.json</a>
   <span id="generate-feedback" class="text-green-600 hidden"></span>
   <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
+  <a href="index.html" class="top-line-btn ml-auto">Back to Terminal</a>
 </div>
 <input type="file" id="config-file" accept="application/json" class="hidden">
 <form id="builder-form">
-    <div class="mb-4 flex gap-2 border-b border-gray-300 dark:border-gray-700">
+    <div id="tabs-bar" class="mb-4 flex gap-2 border-b border-gray-300 dark:border-gray-700">
       <button type="button" @click="activeTab='content'" :class="['tab-btn', activeTab==='content' ? 'tab-btn-active' : '']">Terminal Content</button>
       <button type="button" @click="activeTab='boot'" :class="['tab-btn', activeTab==='boot' ? 'tab-btn-active' : '']">Boot</button>
       <button type="button" @click="activeTab='commands'" :class="['tab-btn', activeTab==='commands' ? 'tab-btn-active' : '']">Commands</button>
