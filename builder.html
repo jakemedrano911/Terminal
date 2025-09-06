@@ -170,23 +170,37 @@
     #builder-wrapper.boot-load {
       overflow:hidden;
       animation:boot-reveal 2s steps(25,end) forwards;
-      clip-path:inset(100% 0 0 0);
+      clip-path:inset(0 0 100% 0);
     }
     @keyframes boot-reveal {
       to { clip-path:inset(0 0 0 0); }
     }
 
     /* Tab content shimmer effect */
+    .tab-content { position:relative; }
     .tab-content.shimmer {
-      animation:tab-shimmer 0.4s steps(2,end) 2;
+      animation:crt-shimmer 0.15s steps(2,end) 6;
     }
-    @keyframes tab-shimmer {
-      0% { transform:translateX(0); }
-      25% { transform:translateX(-1px); }
-      50% { transform:translateX(1px); }
-      75% { transform:translateX(-1px); }
-      100% { transform:translateX(0); }
+    .tab-content.shimmer::after {
+      content:""; position:absolute; inset:0; pointer-events:none;
+      background:repeating-linear-gradient(0deg,rgba(255,255,255,0.03) 0,rgba(255,255,255,0.03) 1px,rgba(0,0,0,0.03) 1px,rgba(0,0,0,0.03) 2px);
+      opacity:0.4; mix-blend-mode:screen;
+      animation:static-noise 0.2s steps(2,end) infinite;
     }
+    @keyframes crt-shimmer {
+      0% { transform:translate(0,0) rotate(0deg); }
+      20% { transform:translate(-2px,1px) rotate(-0.5deg); }
+      40% { transform:translate(1px,-1px) rotate(0.5deg); }
+      60% { transform:translate(-3px,2px) rotate(-1deg); }
+      80% { transform:translate(2px,-2px) rotate(1deg); }
+      100% { transform:translate(0,0) rotate(0deg); }
+    }
+    @keyframes static-noise {
+      0% { background-position:0 0; }
+      100% { background-position:100% -100%; }
+    }
+
+    .response-input { flex:0 0 61%; }
   </style>
 </head>
 <body class="m-0 p-4">
@@ -303,7 +317,7 @@
       <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
         <input v-model="cmd.screen" class="border rounded p-1 w-32" placeholder="Screen ID">
-        <input v-model="cmd.command" class="border rounded p-1 flex-1" placeholder="Response">
+        <input v-model="cmd.command" class="border rounded p-1 response-input" placeholder="Response">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
         <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="mr-1 action-btn" title="Move up">▲</button>
@@ -745,7 +759,7 @@ function triggerTabEffect(){
   const active=[...document.querySelectorAll('.tab-content')].find(el=>el.offsetParent!==null);
   if(active){
     active.classList.add('shimmer');
-    setTimeout(()=>active.classList.remove('shimmer'),400);
+    setTimeout(()=>active.classList.remove('shimmer'),900);
   }
 }
 
@@ -783,6 +797,9 @@ document.addEventListener('click',e=>{
   if(btn.id==='dark-toggle' || btn.classList.contains('tab-btn')) return;
   playSound('Pip/select3.wav');
 });
+
+const backLink=document.querySelector('a[href="index.html"]');
+if(backLink){ backLink.addEventListener('click',()=>playSound('Pip/select3.wav')); }
 
 const passwordEl = document.getElementById('password');
 const dudWordsEl = document.getElementById('dud-words');
