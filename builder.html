@@ -189,14 +189,19 @@
 
       /* UI shake effect */
       #builder-wrapper.shake {
-        animation:ui-shake 0.105s steps(2,end) 6;
+        animation:ui-shake 0.35s cubic-bezier(.36,.07,.19,.97);
       }
       @keyframes ui-shake {
         0% { transform:translateX(0); }
-        20% { transform:translateX(-2px); }
-        40% { transform:translateX(2px); }
-        60% { transform:translateX(-3px); }
-        80% { transform:translateX(3px); }
+        10% { transform:translateX(-12px); }
+        20% { transform:translateX(12px); }
+        30% { transform:translateX(-16px); }
+        40% { transform:translateX(16px); }
+        50% { transform:translateX(-12px); }
+        60% { transform:translateX(12px); }
+        70% { transform:translateX(-8px); }
+        80% { transform:translateX(8px); }
+        90% { transform:translateX(-4px); }
         100% { transform:translateX(0); }
       }
   </style>
@@ -762,15 +767,19 @@ function playSound(src){
 
 const wrapper=document.getElementById('builder-wrapper');
 wrapper.classList.add('boot-load');
+wrapper.addEventListener('animationend',e=>{
+  if(e.animationName==='boot-reveal') wrapper.classList.remove('boot-load');
+});
+setTimeout(()=>wrapper.classList.remove('boot-load'),2000);
 playSound('Pip/Boot/Boot1.wav');
 
 const burstSounds=Array.from({length:17},(_,i)=>`Pip/Burst Static/BurstStatic${String(i+1).padStart(2,'0')}.wav`);
 function playBurst(){ playSound(burstSounds[Math.floor(Math.random()*burstSounds.length)]); }
- function triggerTabEffect(){
-   playBurst();
-   wrapper.classList.add('shake');
-   setTimeout(()=>wrapper.classList.remove('shake'),630);
- }
+function triggerTabEffect(){
+  playBurst();
+  wrapper.classList.add('shake');
+  setTimeout(()=>wrapper.classList.remove('shake'),350);
+}
 
 const tabsBar=document.getElementById('tabs-bar');
 const tabButtons=[...tabsBar.querySelectorAll('button')];
@@ -795,8 +804,6 @@ document.addEventListener('focusin',e=>{
   const btn=e.target.closest('button');
   if(btn) playSound('Pip/Highlight4.wav');
 });
-
-triggerTabEffect();
 
 const darkToggle=document.getElementById('dark-toggle');
 let darkToggleCount=0;
