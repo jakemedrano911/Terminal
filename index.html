@@ -452,6 +452,37 @@ function trackAudio(audio){
   audio.addEventListener('ended',()=>activeAudios.delete(audio));
   return audio;
 }
+
+const preloadedAudios=[];
+
+function preloadAudio(src){
+  const audio=new Audio(src);
+  audio.preload='auto';
+  preloadedAudios.push(audio);
+  return audio;
+}
+
+function playCachedAudio(audio,volume){
+  activeAudios.add(audio);
+  audio.currentTime=0;
+  audio.volume=volume;
+  audio.play();
+  audio.addEventListener('ended',()=>activeAudios.delete(audio),{once:true});
+}
+
+async function resumePreloadedAudio(){
+  for(const audio of preloadedAudios){
+    try{
+      audio.muted=true;
+      await audio.play();
+      audio.pause();
+      audio.muted=false;
+      audio.currentTime=0;
+    }catch(e){
+      console.warn('Preloaded audio resume failed',e);
+    }
+  }
+}
 function stopAllAudio(){
   for(const audio of activeAudios){
     audio.pause();
@@ -651,6 +682,26 @@ humSlider.addEventListener('input',()=>{
 scrollSlider.addEventListener('input',()=>{scrollVolume=scrollSlider.value/100;});
 focusSlider.addEventListener('input',()=>{focusVolume=focusSlider.value/100;});
 selectSlider.addEventListener('input',()=>{selectVolume=selectSlider.value/100;});
+const focusAudio=preloadAudio('Terminal 3/menu/menu_focus.wav');
+const charFocusAudios=[
+  'Terminal 3/single/charsingle_01.wav',
+  'Terminal 3/single/charsingle_02.wav',
+  'Terminal 3/single/charsingle_03.wav',
+  'Terminal 3/single/charsingle_04.wav',
+  'Terminal 3/single/charsingle_05.wav',
+  'Terminal 3/single/charsingle_06.wav'
+].map(preloadAudio);
+const wordFocusAudios=[
+  'Terminal 3/multiple/charmultiple_01.wav',
+  'Terminal 3/multiple/charmultiple_02.wav',
+  'Terminal 3/multiple/charmultiple_03.wav',
+  'Terminal 3/multiple/charmultiple_04.wav'
+].map(preloadAudio);
+const enterCharAudios=[
+  'Terminal 3/enter/charenter_01.wav',
+  'Terminal 3/enter/charenter_02.wav',
+  'Terminal 3/enter/charenter_03.wav'
+].map(preloadAudio);
 userSpeedSelect.value=String([58,75,91,100].includes(userBaseSpeed)?userBaseSpeed:75);
 compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
 userSpeedSelect.addEventListener('change',()=>{
@@ -1371,9 +1422,7 @@ function stopFanHum(){
 
 function playFocusSound(){
   if(!powered) return;
-  const audio=trackAudio(new Audio('Terminal 3/menu/menu_focus.wav'));
-  audio.volume=focusVolume;
-  audio.play();
+  playCachedAudio(focusAudio,focusVolume);
 }
 
 function playSelectSound(){
@@ -1412,45 +1461,20 @@ function playSelectSound(){
 
 function playCharFocusSound(){
   if(!powered) return;
-  const files=[
-    'Terminal 3/single/charsingle_01.wav',
-    'Terminal 3/single/charsingle_02.wav',
-    'Terminal 3/single/charsingle_03.wav',
-    'Terminal 3/single/charsingle_04.wav',
-    'Terminal 3/single/charsingle_05.wav',
-    'Terminal 3/single/charsingle_06.wav'
-  ];
-  const src=files[Math.floor(Math.random()*files.length)];
-  const audio=trackAudio(new Audio(src));
-  audio.volume=focusVolume;
-  audio.play();
+  const audio=charFocusAudios[Math.floor(Math.random()*charFocusAudios.length)];
+  playCachedAudio(audio,focusVolume);
 }
 
 function playWordFocusSound(){
   if(!powered) return;
-  const files=[
-    'Terminal 3/multiple/charmultiple_01.wav',
-    'Terminal 3/multiple/charmultiple_02.wav',
-    'Terminal 3/multiple/charmultiple_03.wav',
-    'Terminal 3/multiple/charmultiple_04.wav'
-  ];
-  const src=files[Math.floor(Math.random()*files.length)];
-  const audio=trackAudio(new Audio(src));
-  audio.volume=focusVolume;
-  audio.play();
+  const audio=wordFocusAudios[Math.floor(Math.random()*wordFocusAudios.length)];
+  playCachedAudio(audio,focusVolume);
 }
 
 function playEnterCharSound(){
   if(!powered) return;
-  const files=[
-    'Terminal 3/enter/charenter_01.wav',
-    'Terminal 3/enter/charenter_02.wav',
-    'Terminal 3/enter/charenter_03.wav'
-  ];
-  const src=files[Math.floor(Math.random()*files.length)];
-  const audio=trackAudio(new Audio(src));
-  audio.volume=selectVolume;
-  audio.play();
+  const audio=enterCharAudios[Math.floor(Math.random()*enterCharAudios.length)];
+  playCachedAudio(audio,selectVolume);
 }
 
 function playPasswordResult(correct){
@@ -1775,8 +1799,9 @@ document.addEventListener('keydown',e=>{
 powerButton.addEventListener('click',async()=>{
   try{
     await audioCtx.resume();
+    await resumePreloadedAudio();
   }catch(e){
-    console.warn('Audio context resume failed',e);
+    console.warn('Audio resume failed',e);
   }
   if(!powered){
     currentCycle++;
