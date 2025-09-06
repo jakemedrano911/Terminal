@@ -664,9 +664,20 @@ const focusSlider=document.getElementById('focus-volume');
 const selectSlider=document.getElementById('select-volume');
 const userSpeedSelect=document.getElementById('user-speed-select');
 const compSpeedSelect=document.getElementById('comp-speed-select');
+const builderButton=document.getElementById('builder-button');
 
 prefButton.addEventListener('click',()=>{
-  prefMenu.style.display=prefMenu.style.display==='flex'?'none':'flex';
+  const opening=prefMenu.style.display!=='flex';
+  prefMenu.style.display=opening?'flex':'none';
+  const sound=trackAudio(new Audio(opening?'Pip/FavoriteOn.wav':'Pip/FavoriteOff.wav'));
+  sound.play();
+});
+
+builderButton.addEventListener('click',e=>{
+  e.preventDefault();
+  const audio=trackAudio(new Audio('Pip/holotapestart3.wav'));
+  audio.play();
+  audio.addEventListener('ended',()=>{window.location.href=builderButton.href;});
 });
 
 let humVolume=Math.pow(humSlider.value/100,2);
