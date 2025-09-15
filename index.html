@@ -470,11 +470,24 @@ function trackAudio(audio){
 }
 
 const preloadedAudios=[];
+const customAudioCache=new Map();
 
 function preloadAudio(src){
   const audio=new Audio(src);
   audio.preload='auto';
   preloadedAudios.push(audio);
+  return audio;
+}
+
+function preloadCustomAudio(src){
+  if(typeof src!=='string') return null;
+  const key=src.trim();
+  if(!key) return null;
+  if(customAudioCache.has(key)) return customAudioCache.get(key);
+  const audio=new Audio(key);
+  audio.preload='auto';
+  preloadedAudios.push(audio);
+  customAudioCache.set(key,audio);
   return audio;
 }
 
@@ -484,6 +497,25 @@ function playCachedAudio(audio,volume){
   audio.volume=volume;
   audio.play();
   audio.addEventListener('ended',()=>activeAudios.delete(audio),{once:true});
+}
+
+function playCustomSound(src,volume){
+  if(!powered) return false;
+  if(typeof src!=='string') return false;
+  const key=src.trim();
+  if(!key) return false;
+  const audio=preloadCustomAudio(key);
+  if(!audio) return false;
+  playCachedAudio(audio,volume);
+  return true;
+}
+
+function playCustomHoverSound(src){
+  return playCustomSound(src,focusVolume);
+}
+
+function playCustomSelectSound(src){
+  return playCustomSound(src,selectVolume);
 }
 
 async function resumePreloadedAudio(){
@@ -541,6 +573,8 @@ async function loadConfig(cycle=currentCycle){
         const item={text:`> ${name}`};
         if(info.screen) item.screen=info.screen;
         if(info.command) item.command=info.command;
+        if(info.selectSound) item.selectSound=info.selectSound;
+        if(info.hoverSound) item.hoverSound=info.hoverSound;
         const helpItems=screens.help;
         const retIdx=helpItems.findIndex(it=>typeof it==='object' && it.screen==='menu');
         if(retIdx>=0) helpItems.splice(retIdx,0,item); else helpItems.push(item);
@@ -577,6 +611,32 @@ async function loadConfig(cycle=currentCycle){
   };
   startLocked=cfg.locked!==undefined?cfg.locked:true;
   if(hasHacked) startLocked=false;
+  preloadConfigAudio();
+}
+
+function preloadConfigAudio(){
+  const sources=new Set();
+  if(screens && typeof screens==='object'){
+    for(const data of Object.values(screens)){
+      const items=Array.isArray(data)?data:((data&&data.items)||[]);
+      if(!items) continue;
+      for(const item of items){
+        if(item && typeof item==='object'){
+          if(typeof item.selectSound==='string' && item.selectSound.trim()) sources.add(item.selectSound.trim());
+          if(typeof item.hoverSound==='string' && item.hoverSound.trim()) sources.add(item.hoverSound.trim());
+        }
+      }
+    }
+  }
+  for(const info of Object.values(commands||{})){
+    if(info && typeof info==='object'){
+      if(typeof info.selectSound==='string' && info.selectSound.trim()) sources.add(info.selectSound.trim());
+      if(typeof info.hoverSound==='string' && info.hoverSound.trim()) sources.add(info.hoverSound.trim());
+    }
+  }
+  for(const src of sources){
+    preloadCustomAudio(src);
+  }
 }
 
 const terminal=document.getElementById('terminal');
@@ -1368,6 +1428,7 @@ function clearResponses(){
 }
 
 async function executeCustomCommand(info){
+  ensureSelectSound(info);
   if(info.screen){
     await showScreen(info.screen);
     if(info.command){
@@ -1383,6 +1444,7 @@ async function executeCommand(info, rawCmd){
   if(info.action){
     switch(info.action){
       case 'syntaxhelper':
+        ensureSelectSound(info);
         if(hackingActive){
           hackingData.grid.querySelectorAll('.bracket').forEach(span=>span.classList.add('highlight'));
           setTrackedTimeout(()=>hackingData.grid.querySelectorAll('.bracket').forEach(span=>span.classList.remove('highlight')),1000);
@@ -1393,14 +1455,17 @@ async function executeCommand(info, rawCmd){
         }
         break;
       case 'back':
+        ensureSelectSound(info);
         goBack();
         if(info.command) displayMessage(info.command);
         break;
       case 'help':
+        ensureSelectSound(info);
         await showScreen(info.screen || 'help');
         if(info.command) displayMessage(info.command);
         break;
       case 'adminoverride':
+        ensureSelectSound(info);
         if(hackingActive){
           commandAdminOverride(rawCmd, info.command);
         }else if(info.command){
@@ -1410,6 +1475,7 @@ async function executeCommand(info, rawCmd){
         }
         break;
       case 'adminallowances':
+        ensureSelectSound(info);
         if(hackingActive){
           commandAdminAllowances(rawCmd, info.command);
         }else if(info.command){
@@ -1577,6 +1643,15 @@ function playSelectSound(){
   const enterAudio=trackAudio(new Audio(enterSrc));
   enterAudio.volume=selectVolume;
   enterAudio.play();
+}
+
+function ensureSelectSound(info){
+  const src=info && typeof info.selectSound==='string'?info.selectSound.trim():'';
+  if(src){
+    if(playCustomSelectSound(src)) return true;
+  }
+  playSelectSound();
+  return false;
 }
 
 function playCharFocusSound(){
@@ -1839,9 +1914,14 @@ async function showScreen(name){
       if(typeof line==='object'){
         div.className='option';
         div.tabIndex=0;
+        const hoverSound=typeof line.hoverSound==='string'?line.hoverSound.trim():'';
+        const selectSound=typeof line.selectSound==='string'?line.selectSound.trim():'';
+        if(hoverSound) div.dataset.hoverSound=hoverSound; else delete div.dataset.hoverSound;
+        if(selectSound) div.dataset.selectSound=selectSound; else delete div.dataset.selectSound;
         await typeText(div,line.text);
         div.addEventListener('click',async()=>{
-          playSelectSound();
+          const sound=div.dataset.selectSound||'';
+          if(!playCustomSelectSound(sound)) playSelectSound();
           if(line.screen){
             await showScreen(line.screen);
             if(line.command){
@@ -1857,7 +1937,8 @@ async function showScreen(name){
             currentOptions[selected].classList.remove('selected');
             selected=-1;
           }
-          playFocusSound();
+          const sound=div.dataset.hoverSound||'';
+          if(!playCustomHoverSound(sound)) playFocusSound();
         });
         currentOptions.push(div);
       }else{
@@ -1898,13 +1979,15 @@ document.addEventListener('keydown',e=>{
     selected=selected<0?0:(selected+1)%currentOptions.length;
     currentOptions[selected].classList.add('selected');
     currentOptions[selected].focus();
-    playFocusSound();
+    const sound=currentOptions[selected].dataset.hoverSound||'';
+    if(!playCustomHoverSound(sound)) playFocusSound();
   }else if(e.key==='ArrowUp'){
     if(selected>=0) currentOptions[selected].classList.remove('selected');
     selected=selected<0?currentOptions.length-1:(selected-1+currentOptions.length)%currentOptions.length;
     currentOptions[selected].classList.add('selected');
     currentOptions[selected].focus();
-    playFocusSound();
+    const sound=currentOptions[selected].dataset.hoverSound||'';
+    if(!playCustomHoverSound(sound)) playFocusSound();
   }else if(e.key==='Enter' && selected>=0){
     currentOptions[selected].click();
   }

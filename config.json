@@ -43,12 +43,12 @@
   "compSpeed": 90,
   "screens": {
     "menu": [
-      { "text": "> Protectron Schematics", "screen": "protectron" },
+      { "text": "> Protectron Schematics", "screen": "protectron", "hoverSound": "Pip/Highlight4.wav", "selectSound": "Pip/select3.wav" },
       { "text": "> Mr. Handy Service Records", "screen": "handy" },
       { "text": "> Assaultron Combat Models", "screen": "assaultron" },
       { "text": "> Securitron Systems Control", "screen": "securitron" },
       { "text": "> Turret Controls", "screen": "turret" },
-      { "text": "> Run Protectron Maintenance Mode", "command": "Maintenance mode Engaged" },
+      { "text": "> Run Protectron Maintenance Mode", "command": "Maintenance mode Engaged", "selectSound": "Terminal 3/passgood.wav" },
       { "text": "> Experimental Robotics Files", "screen": "experimental" },
       "",
       ""
@@ -149,7 +149,7 @@
     "syntaxhelper": { "action": "syntaxhelper", "hacking": true },
     "ADMIN OVERRIDE": { "action": "adminoverride", "command": "Access granted.", "hacking": true },
     "ADMIN ALLOWANCES": { "action": "adminallowances", "command": "Allowances set to 99.", "hacking": true },
-    "diagnostics": { "command": "Running system diagnostics...", "help": true },
+    "diagnostics": { "command": "Running system diagnostics...", "help": true, "selectSound": "Terminal 3/passgood.wav" },
     "exit": { "screen": "menu", "help": true, "hacking": true }
   },
   "style": {

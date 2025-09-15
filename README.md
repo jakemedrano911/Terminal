@@ -16,6 +16,43 @@ If you power off the terminal you can choose a different file and power on
 again to reload with the new configuration.
 
 
+## Per-item audio cues
+
+Every interactive entry in a screen can define optional `hoverSound` and
+`selectSound` properties. These values point to audio files (relative to the
+HTML page) that should play when the item is highlighted or activated. Commands
+can also specify the same properties so that typing a command triggers custom
+audio before its output appears. When the sounds are omitted, the terminal falls
+back to its default focus and select effects.
+
+Example menu item:
+
+```json
+{
+  "text": "> Initiate Launch Sequence",
+  "command": "Launch parameters locked in.",
+  "hoverSound": "Pip/Highlight4.wav",
+  "selectSound": "Terminal 3/passgood.wav"
+}
+```
+
+Example command entry:
+
+```json
+"diagnostics": {
+  "command": "Running system diagnostics...",
+  "help": true,
+  "selectSound": "Terminal 3/passgood.wav"
+}
+```
+
+The builder interface exposes these properties through the new **Select sound**
+and **Hover sound** inputs shown beside each menu item and command. Enter a
+relative or absolute URL to the audio clip you want to use; the builder exports
+the values directly into `config.json`, and the terminal preloads and plays the
+clips when needed.
+
+
 ## Optional Passwords and Dud Words
 
 The hacking mini-game can be customized by providing a `password` and optional

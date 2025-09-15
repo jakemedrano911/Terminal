@@ -271,6 +271,8 @@
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
                   <input v-model="item.screen" class="menu-screen mr-1 border rounded p-1 w-24" placeholder="Screen id">
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
+                  <input v-model="item.selectSound" class="menu-select-sound mr-1 border rounded p-1 w-36" placeholder="Select sound">
+                  <input v-model="item.hoverSound" class="menu-hover-sound mr-1 border rounded p-1 w-36" placeholder="Hover sound">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
                     <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
@@ -321,6 +323,8 @@
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
         <input v-model="cmd.screen" class="border rounded p-1 w-32" placeholder="Screen ID">
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
+        <input v-model="cmd.selectSound" class="border rounded p-1 w-36" placeholder="Select sound">
+        <input v-model="cmd.hoverSound" class="border rounded p-1 w-36" placeholder="Hover sound">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
         <div class="flex gap-1">
@@ -434,12 +438,12 @@ const app = Vue.createApp({
         bootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
         lockedBootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
         commands: [
-          {name:'back',screen:'',command:'',help:false,hacking:false,action:'back',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'help',screen:'',command:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'?',screen:'',command:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'syntaxhelper',screen:'',command:'',help:false,hacking:true,action:'syntaxhelper',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'ADMIN OVERRIDE',screen:'',command:'Access granted.',help:false,hacking:true,action:'adminoverride',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'ADMIN ALLOWANCES',screen:'',command:'Allowances set to 99.',help:false,hacking:true,action:'adminallowances',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}
+          {name:'back',screen:'',command:'',help:false,hacking:false,action:'back',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'help',screen:'',command:'',help:true,hacking:false,action:'help',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'?',screen:'',command:'',help:true,hacking:false,action:'help',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'syntaxhelper',screen:'',command:'',help:false,hacking:true,action:'syntaxhelper',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'ADMIN OVERRIDE',screen:'',command:'Access granted.',help:false,hacking:true,action:'adminoverride',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'ADMIN ALLOWANCES',screen:'',command:'Allowances set to 99.',help:false,hacking:true,action:'adminallowances',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}
         ],
         difficulties: [],
         difficultyChoice: 'Average',
@@ -483,7 +487,7 @@ const app = Vue.createApp({
         this.screens.push({
           id,
           color,
-          items:[{text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
+          items:[{text:'', screen:'', command:'', selectSound:'', hoverSound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
           open:true,
           uid:crypto.randomUUID?crypto.randomUUID():Math.random(),
           textColor:text,
@@ -497,7 +501,7 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
       },
       addCommand() {
-        this.commands.push({name:'',screen:'',command:'',help:false,hacking:false,action:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        this.commands.push({name:'',screen:'',command:'',help:false,hacking:false,action:'',selectSound:'',hoverSound:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
       },
       removeCommand(idx) {
         this.commands.splice(idx,1);
@@ -513,7 +517,7 @@ const app = Vue.createApp({
         [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       },
       addMenuItem(screen) {
-        screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        screen.items.push({text:'', screen:'', command:'', selectSound:'', hoverSound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
         this.$nextTick(this.initSortables);
       },
         removeMenuItem(sIdx, iIdx) {
@@ -603,17 +607,19 @@ const app = Vue.createApp({
           }
           items.forEach(item=>{
             if (typeof item === 'string') {
-              screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+              screen.items.push({text:item, screen:'', command:'', selectSound:'', hoverSound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
             } else {
               screen.items.push({
                 text: item.text || '',
                 screen: item.screen || '',
                 command: item.command || '',
+                selectSound: item.selectSound || '',
+                hoverSound: item.hoverSound || '',
                 uid: crypto.randomUUID?crypto.randomUUID():Math.random()
               });
             }
           });
-          if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+          if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', selectSound:'', hoverSound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
           this.screens.push(screen);
         });
         Object.entries(config.commands || {}).forEach(([name, info])=>{
@@ -624,6 +630,8 @@ const app = Vue.createApp({
             help: !!info.help,
             hacking: !!info.hacking,
             action: info.action || '',
+            selectSound: info.selectSound || '',
+            hoverSound: info.hoverSound || '',
             uid: crypto.randomUUID?crypto.randomUUID():Math.random()
           });
         });
@@ -664,11 +672,20 @@ const app = Vue.createApp({
           const text=(it.text||'').trimEnd();
           const screen=(it.screen||'').trim();
           const command=(it.command||'').trim();
-          if(!text && !screen && !command) return;
-          if(screen && command){ items.push({text,screen,command}); }
-          else if(screen){ items.push({text,screen}); }
-          else if(command){ items.push({text,command}); }
-          else { items.push(text); }
+          const selectSound=(it.selectSound||'').trim();
+          const hoverSound=(it.hoverSound||'').trim();
+          if(!text && !screen && !command && !selectSound && !hoverSound) return;
+          const needsObject=!!(screen || command || selectSound || hoverSound);
+          if(needsObject){
+            const obj={text};
+            if(screen) obj.screen=screen;
+            if(command) obj.command=command;
+            if(selectSound) obj.selectSound=selectSound;
+            if(hoverSound) obj.hoverSound=hoverSound;
+            items.push(obj);
+          }else{
+            items.push(text);
+          }
         });
         const style = {};
         if(scr.textColor !== textColor) style.textColor = scr.textColor;
@@ -683,12 +700,16 @@ const app = Vue.createApp({
         const screen=(c.screen||'').trim();
         const message=(c.command||'').trim();
         const action=(c.action||'').trim();
+        const selectSound=(c.selectSound||'').trim();
+        const hoverSound=(c.hoverSound||'').trim();
         const obj={};
         if(screen) obj.screen=screen;
         if(message) obj.command=message;
         if(action) obj.action=action;
         if(c.help) obj.help=true;
         if(c.hacking) obj.hacking=true;
+        if(selectSound) obj.selectSound=selectSound;
+        if(hoverSound) obj.hoverSound=hoverSound;
         if(Object.keys(obj).length) commandsObj[name]=obj;
       });
       const diffValue = this.difficultyChoice;
