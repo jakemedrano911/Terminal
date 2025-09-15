@@ -21,13 +21,19 @@
       --border-color:#008800;
     }
     body {
-      background-color: #f9fafb;
-      color: #000000;
+      background-color:#f9fafb;
+      color:#000;
+      font-family:"FSEX300","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
+      background-image:repeating-linear-gradient(
+        rgba(0,0,0,0.05) 0px,
+        rgba(0,0,0,0.05) 1px,
+        transparent 1px,
+        transparent 4px
+      );
     }
     .dark body {
       background:var(--terminal-bg);
       color:var(--text-color);
-      font-family:"FSEX300","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
       background-image:repeating-linear-gradient(
         rgba(0,0,0,0.55) 0px,
         rgba(0,0,0,0.55) 1px,
@@ -36,22 +42,22 @@
       );
     }
     fieldset {
-      background-color: #f3f4f6;
-      border-color: #d1d5db;
+      background-color:#f3f4f6;
+      border:2px solid #d1d5db;
     }
     .dark fieldset {
-      background-color: var(--terminal-bg);
+      background-color:var(--terminal-bg);
       border:2px solid var(--border-color);
     }
     input, textarea, select {
-      background-color: #f9fafb;
-      border-color: #d1d5db;
-      color: #000000;
+      background-color:#f9fafb;
+      border:2px solid #d1d5db;
+      color:#000;
     }
     .dark input, .dark textarea, .dark select {
-      background-color: transparent;
+      background-color:transparent;
       border:2px solid var(--border-color);
-      color: var(--text-color);
+      color:var(--text-color);
     }
     ::placeholder {
       color: #4b5563;
@@ -70,17 +76,20 @@
     }
     .drag-ghost {
       opacity: 0.4;
+      border: 2px dashed #d1d5db;
+    }
+    .dark .drag-ghost {
       border: 2px dashed var(--border-color);
     }
     .dragging {
       user-select: none;
     }
       .action-btn {
-        border: 1px solid #9ca3af;
-        border-radius: 0.25rem;
-        padding: 0 0.25rem;
-        background-color: #f3f4f6;
-        color: #000000;
+        border:2px solid #9ca3af;
+        border-radius:0.25rem;
+        padding:0 0.25rem;
+        background-color:#f3f4f6;
+        color:#000;
       }
       .action-btn:hover {
         background-color: #e5e7eb;
@@ -114,6 +123,8 @@
     .dark .top-line-btn:hover {
       background-color:#0a1f0a;
     }
+    .delete-icon{ color:#000; }
+    .dark .delete-icon{ color:var(--text-color); }
 
     .tab-btn {
       padding: 0.25rem 0.5rem;
@@ -134,7 +145,7 @@
     }
     .dark .tab-btn {
       border:2px solid var(--border-color);
-      border-bottom:none;
+      border-bottom-color: var(--border-color);
       background-color: var(--terminal-bg);
       color: var(--text-color);
       text-shadow:0 0 5px rgba(122,255,122,0.5);
@@ -165,6 +176,34 @@
     .dark #tabs-bar { border-bottom:2px solid var(--border-color); }
     .dark a { color: var(--text-color); }
     .dark #generate-feedback { color: var(--text-color); }
+
+    /* Boot sequence reveal */
+    #builder-wrapper.boot-load {
+      overflow:hidden;
+      animation:boot-reveal 2s steps(25,end) forwards;
+      clip-path:inset(0 0 100% 0);
+    }
+    @keyframes boot-reveal {
+      to { clip-path:inset(0 0 0 0); }
+    }
+
+      /* UI shake effect */
+      #builder-wrapper.shake {
+        animation:ui-shake 0.35s cubic-bezier(.36,.07,.19,.97);
+      }
+      @keyframes ui-shake {
+        0% { transform:translateX(0); }
+        10% { transform:translateX(-12px); }
+        20% { transform:translateX(12px); }
+        30% { transform:translateX(-16px); }
+        40% { transform:translateX(16px); }
+        50% { transform:translateX(-12px); }
+        60% { transform:translateX(12px); }
+        70% { transform:translateX(-8px); }
+        80% { transform:translateX(8px); }
+        90% { transform:translateX(-4px); }
+        100% { transform:translateX(0); }
+      }
   </style>
 </head>
 <body class="m-0 p-4">
@@ -174,10 +213,10 @@
   <button type="button" id="load-config" class="top-line-btn" title="Load configuration from a JSON file such as one previously exported.">Load Config</button>
   <button type="submit" form="builder-form" class="top-line-btn" title="Generate the configuration file and enable downloading config.json">Generate Config</button>
   <a id="download-link" class="hidden text-blue-600 underline" download="config.json">Download config.json</a>
-  <span id="generate-feedback" class="text-green-600 hidden"></span>
   <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
-  <a href="index.html" class="top-line-btn ml-auto">Back to Terminal</a>
+  <a id="back-to-terminal" href="index.html" class="top-line-btn ml-auto">Back to Terminal</a>
 </div>
+<div id="generate-feedback" class="text-green-600 hidden mt-2"></div>
 <input type="file" id="config-file" accept="application/json" class="hidden">
 <form id="builder-form">
     <div id="tabs-bar" class="mb-4 flex gap-2 border-b border-gray-300 dark:border-gray-700">
@@ -187,7 +226,7 @@
       <button type="button" @click="activeTab='hacking'" :class="['tab-btn', activeTab==='hacking' ? 'tab-btn-active' : '']">Hacking</button>
       <button type="button" @click="activeTab='prefs'" :class="['tab-btn', activeTab==='prefs' ? 'tab-btn-active' : '']">Preferences</button>
     </div>
-  <div v-show="activeTab==='content'" class="space-y-4">
+  <div v-show="activeTab==='content'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Enter the lines displayed at the top of the terminal. Each line becomes a separate title line. Example: 'ROBCO INDUSTRIES UNIFIED OPERATING SYSTEM'.">
       <legend class="flex items-center gap-1">Titles</legend>
       <textarea id="titles" rows="4" cols="50" class="w-full p-2 border rounded" placeholder="Each line becomes a title line" title="Each line becomes a title line, e.g., ROBCO INDUSTRIES UNIFIED OPERATING SYSTEM"></textarea>
@@ -200,7 +239,7 @@
       <legend class="flex items-center gap-1">Screens</legend>
       <div id="screens-container">
         <template v-for="(screen, sIdx) in screens">
-          <div :key="screen.uid" class="screen mb-4 border border-l-4 rounded p-2 text-white" :style="{borderColor: screen.color, backgroundColor: screen.color}">
+            <div :key="screen.uid" class="screen mb-4 border border-l-4 rounded p-2" :style="{borderColor: screen.color, backgroundColor: screen.color, color: screen.textColor}">
             <div class="mb-2">
               <div class="flex flex-wrap items-center mb-2">
                 <button type="button" @click="screen.open = !screen.open" class="mr-2 action-btn" :aria-expanded="screen.open">{{screen.open ? '▼' : '►' }}</button>
@@ -209,7 +248,7 @@
                 <input type="text" v-model="screen.color" class="w-20 p-1 border rounded mr-2" title="Color is for organization only and does not affect terminal appearance">
                 <button type="button" @click="moveScreenUp(sIdx)" :disabled="sIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                 <button type="button" @click="moveScreenDown(sIdx)" :disabled="sIdx===screens.length-1" class="mr-1 action-btn" title="Move down">▼</button>
-                <button type="button" @click="removeScreen(sIdx)" class="action-btn" title="Remove screen"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+                  <button type="button" @click="removeScreen(sIdx)" class="action-btn" title="Remove screen"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
               </div>
               <div class="flex flex-wrap items-center">
                 <label class="flex items-center mr-2">Text:
@@ -228,13 +267,13 @@
             </div>
             <div v-show="screen.open" class="pl-6 items-container" :data-sidx="sIdx" :id="'items-'+screen.uid">
               <template v-for="(item, iIdx) in screen.items">
-                <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded text-white" :style="{backgroundColor: screen.color, borderColor: screen.color}">
+                <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded" :style="{backgroundColor: screen.color, borderColor: screen.color, color: screen.textColor}">
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
                   <input v-model="item.screen" class="menu-screen mr-1 border rounded p-1 w-24" placeholder="Screen id">
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
-                  <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+                    <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
                 </div>
               </template>
               <button type="button" @click="addMenuItem(screen)" class="mt-2 px-2 py-1 border rounded">Add Menu Item</button>
@@ -245,7 +284,7 @@
       </div>
     </fieldset>
   </div>
-  <div v-show="activeTab==='boot'" class="space-y-4">
+  <div v-show="activeTab==='boot'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Boot Sequence</legend>
       <div v-for="(step, idx) in bootSequence" :key="step.uid" class="flex items-center flex-wrap gap-1 mb-1">
@@ -256,7 +295,7 @@
         </select>
         <button type="button" @click="moveBootStepUp(bootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
         <button type="button" @click="moveBootStepDown(bootSequence, idx)" :disabled="idx===bootSequence.length-1" class="action-btn">▼</button>
-        <button type="button" @click="removeBootStep(bootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+        <button type="button" @click="removeBootStep(bootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
       </div>
       <button type="button" @click="addBootStep(bootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
@@ -270,28 +309,30 @@
         </select>
         <button type="button" @click="moveBootStepUp(lockedBootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
         <button type="button" @click="moveBootStepDown(lockedBootSequence, idx)" :disabled="idx===lockedBootSequence.length-1" class="action-btn">▼</button>
-        <button type="button" @click="removeBootStep(lockedBootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+        <button type="button" @click="removeBootStep(lockedBootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
       </div>
       <button type="button" @click="addBootStep(lockedBootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
   </div>
-  <div v-show="activeTab==='commands'" class="space-y-4">
+  <div v-show="activeTab==='commands'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Commands</legend>
       <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
         <input v-model="cmd.screen" class="border rounded p-1 w-32" placeholder="Screen ID">
-        <input v-model="cmd.command" class="border rounded p-1 flex-1" placeholder="Response">
+        <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
-        <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="mr-1 action-btn" title="Move up">▲</button>
-        <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="mr-1 action-btn" title="Move down">▼</button>
-        <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+        <div class="flex gap-1">
+          <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="action-btn" title="Move up">▲</button>
+          <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="action-btn" title="Move down">▼</button>
+          <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+        </div>
       </div>
       <button type="button" @click="addCommand" class="mt-2 action-btn">Add Command</button>
     </fieldset>
   </div>
-  <div v-show="activeTab==='hacking'" class="space-y-4">
+  <div v-show="activeTab==='hacking'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Configure hacking settings for locked terminals.">
       <legend class="flex items-center gap-1">Hacking</legend>
       <label class="block" title="If checked, the terminal starts locked and requires hacking before use."><input type="checkbox" id="locked" checked class="mr-1"> Locked</label>
@@ -326,7 +367,7 @@
               <div class="flex items-center mb-2">
                 <button type="button" @click="d.open = !d.open" class="mr-2 action-btn">{{ d.open ? '▼' : '►' }}</button>
                 <input v-model="d.name" class="diff-name mr-2 border rounded p-1" placeholder="Name">
-                <button type="button" @click="removeDifficulty(idx)" class="action-btn" title="Remove difficulty"><span class="w-4 h-4 flex items-center justify-center text-black dark:text-white">&times;</span></button>
+                <button type="button" @click="removeDifficulty(idx)" class="action-btn" title="Remove difficulty"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
               </div>
               <div v-show="d.open" class="pl-6 space-y-1">
                 <label class="block">Words: <input type="number" v-model.number="d.wordCount[0]" class="word-min mr-1 border rounded p-1 w-16" min="1"> - <input type="number" v-model.number="d.wordCount[1]" class="word-max border rounded p-1 w-16" min="1"></label>
@@ -338,7 +379,7 @@
         </fieldset>
     </fieldset>
   </div>
-  <div v-show="activeTab==='prefs'" class="space-y-4">
+  <div v-show="activeTab==='prefs'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Customize terminal appearance.">
       <legend class="flex items-center gap-1">Default Appearance</legend>
       <label class="block" title="Color of text displayed in the terminal, e.g., #7aff7a.">Default Text Color:
@@ -420,7 +461,18 @@ const app = Vue.createApp({
       return this.difficulties.map(d => `${d.name} (${d.length[0]}-${d.length[1]} letters, ${d.wordCount[0]}-${d.wordCount[1]} words)`).join('; ') + '; Random selects any difficulty.';
     }
   },
+  watch: {
+    textColor: 'applyTheme',
+    bgColor: 'applyTheme',
+    borderColor: 'applyTheme'
+  },
   methods: {
+      applyTheme() {
+        const root = document.documentElement;
+        root.style.setProperty('--text-color', this.textColor || DEFAULT_TEXT_COLOR);
+        root.style.setProperty('--terminal-bg', this.bgColor || DEFAULT_BG_COLOR);
+        root.style.setProperty('--border-color', this.borderColor || DEFAULT_BORDER_COLOR);
+      },
       addScreen(id='') {
         const text = this.textColor || DEFAULT_TEXT_COLOR;
         const bg = this.bgColor || DEFAULT_BG_COLOR;
@@ -685,6 +737,7 @@ const app = Vue.createApp({
     this.addScreen('menu');
     defaultDifficulties.forEach(d=>this.addDifficulty(d));
     this.$nextTick(this.initSortables);
+    this.applyTheme();
   }
 });
 
@@ -705,7 +758,85 @@ document.getElementById('config-file').addEventListener('change', e => {
     };
   reader.readAsText(file);
 });
-document.getElementById('dark-toggle').addEventListener('click', ()=> document.documentElement.classList.toggle('dark'));
+
+function playSound(src){
+  const a=new Audio(src);
+  a.play();
+  return a;
+}
+
+const wrapper=document.getElementById('builder-wrapper');
+wrapper.classList.add('boot-load');
+wrapper.addEventListener('animationend',e=>{
+  if(e.animationName==='boot-reveal') wrapper.classList.remove('boot-load');
+});
+setTimeout(()=>wrapper.classList.remove('boot-load'),2000);
+playSound('Pip/Boot/Boot1.wav');
+
+const burstSounds=Array.from({length:17},(_,i)=>`Pip/Burst Static/BurstStatic${String(i+1).padStart(2,'0')}.wav`);
+function playBurst(){ playSound(burstSounds[Math.floor(Math.random()*burstSounds.length)]); }
+function triggerTabEffect(){
+  playBurst();
+  wrapper.classList.add('shake');
+  setTimeout(()=>wrapper.classList.remove('shake'),350);
+}
+
+const tabsBar=document.getElementById('tabs-bar');
+const tabButtons=[...tabsBar.querySelectorAll('button')];
+let currentTabIndex=0;
+tabButtons.forEach((btn,i)=>{
+  btn.addEventListener('click',()=>{
+    if(i<currentTabIndex) playSound('Pip/RotaryVertical01.wav');
+    else if(i>currentTabIndex) playSound('Pip/RotaryVertical03.wav');
+    currentTabIndex=i;
+    triggerTabEffect();
+  });
+});
+
+document.addEventListener('mouseover',e=>{
+  const btn=e.target.closest('button, a.top-line-btn');
+  if(!btn||btn.dataset.hoverSoundPlayed) return;
+  playSound('Pip/Highlight4.wav');
+  btn.dataset.hoverSoundPlayed='1';
+  btn.addEventListener('mouseleave',()=>delete btn.dataset.hoverSoundPlayed,{once:true});
+});
+document.addEventListener('focusin',e=>{
+  const btn=e.target.closest('button, a.top-line-btn');
+  if(btn) playSound('Pip/Highlight4.wav');
+});
+
+const darkToggle=document.getElementById('dark-toggle');
+let darkToggleCount=0;
+darkToggle.addEventListener('click',()=>{
+  const isDark=document.documentElement.classList.toggle('dark');
+  if(isDark){
+    if(darkToggleCount>0) playSound('Pip/LightOff.wav');
+  }else{
+    playSound('Pip/LightOn.wav');
+  }
+  darkToggleCount++;
+});
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('button, a.top-line-btn');
+  if(!btn) return;
+  if(btn.id==='dark-toggle' || btn.classList.contains('tab-btn') || btn.id==='back-to-terminal') return;
+  playSound('Pip/select3.wav');
+});
+
+// Preload select sound to reduce latency
+const backSelectPreload=new Audio('Pip/select3.wav');
+backSelectPreload.preload='auto';
+backSelectPreload.load();
+
+// Play select sound and navigate after it finishes
+document.getElementById('back-to-terminal').addEventListener('click',e=>{
+  e.preventDefault();
+  const audio=playSound('Pip/select3.wav');
+  const go=()=>{ window.location.href='index.html'; };
+  audio.addEventListener('ended',go,{once:true});
+  setTimeout(go,150);
+});
 
 const passwordEl = document.getElementById('password');
 const dudWordsEl = document.getElementById('dud-words');
