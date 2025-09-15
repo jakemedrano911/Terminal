@@ -363,7 +363,6 @@
             <option value="95">Fast</option>
           </select>
         </label>
-        <button type="button" id="reset-session-button">Reset Session</button>
       </div>
     </div>
     <div id="config-container">
@@ -638,9 +637,6 @@ let hackingData=null;
 let terminalLocked=false;
 let hasHacked=false;
 let hackedPasswordLength=0;
-const SESSION_STATE_KEY='terminalSessionState';
-let restoringSession=false;
-let skipNextSessionSave=false;
 
 function resetSpeeds(){
   userSpeed=userBaseSpeed;
@@ -666,80 +662,6 @@ function leftAlignHeader(){
   header.style.textAlign='left';
 }
 
-function getSessionSnapshot(){
-  const currentScreen=currentScreenName || (screenHistory.length?screenHistory[screenHistory.length-1]:null);
-  if(!currentScreen) return null;
-  return {
-    screenHistory:screenHistory.slice(),
-    currentScreen,
-    inputText,
-    options:currentOptions.map(opt=>opt.textContent.trim())
-  };
-}
-
-function persistSessionState(){
-  if(restoringSession) return;
-  if(skipNextSessionSave){
-    skipNextSessionSave=false;
-    return;
-  }
-  const snapshot=getSessionSnapshot();
-  if(!snapshot) return;
-  try{
-    localStorage.setItem(SESSION_STATE_KEY,JSON.stringify(snapshot));
-  }catch(err){
-    console.warn('Failed to save session state',err);
-  }
-}
-
-function loadPersistedSessionState(){
-  try{
-    const raw=localStorage.getItem(SESSION_STATE_KEY);
-    if(!raw) return null;
-    return JSON.parse(raw);
-  }catch(err){
-    console.warn('Failed to load session state',err);
-    return null;
-  }
-}
-
-function clearPersistedSessionState(){
-  try{
-    localStorage.removeItem(SESSION_STATE_KEY);
-  }catch(err){
-    console.warn('Failed to clear session state',err);
-  }
-}
-
-async function restoreSessionStateIfAvailable(){
-  const saved=loadPersistedSessionState();
-  if(!saved || !saved.currentScreen) return false;
-  if(typeof saved.currentScreen!=='string') return false;
-  if(saved.screenHistory && !Array.isArray(saved.screenHistory)) return false;
-  if(saved.currentScreen && !screens[saved.currentScreen]) return false;
-  const history=Array.isArray(saved.screenHistory)?saved.screenHistory.slice():[];
-  screenHistory=history.length?history.slice(0,-1):[];
-  let restored=false;
-  restoringSession=true;
-  try{
-    await showScreen(saved.currentScreen);
-    input.textContent=saved.inputText||'';
-    inputText=saved.inputText||'';
-    updateInput();
-    restored=true;
-  }catch(err){
-    console.warn('Failed to restore session state',err);
-    screenHistory=[];
-    currentScreenName=null;
-  }finally{
-    restoringSession=false;
-  }
-  if(!restored) return false;
-  focusInput();
-  persistSessionState();
-  return true;
-}
-
 function applyScreenStyle(style){
   const t=style&&style.textColor?style.textColor:baseStyle.textColor;
   const b=style&&style.backgroundColor?style.backgroundColor:baseStyle.backgroundColor;
@@ -758,7 +680,6 @@ const focusSlider=document.getElementById('focus-volume');
 const selectSlider=document.getElementById('select-volume');
 const userSpeedSelect=document.getElementById('user-speed-select');
 const compSpeedSelect=document.getElementById('comp-speed-select');
-const resetSessionButton=document.getElementById('reset-session-button');
 const builderButton=document.getElementById('builder-button');
 
 prefButton.addEventListener('click',()=>{
@@ -774,18 +695,6 @@ builderButton.addEventListener('click',e=>{
   audio.play();
   audio.addEventListener('ended',()=>{window.location.href=builderButton.href;});
 });
-
-if(resetSessionButton){
-  resetSessionButton.addEventListener('click',()=>{
-    skipNextSessionSave=true;
-    clearPersistedSessionState();
-    prefMenu.style.display='none';
-    if(powered){
-      displayMessage('Session reset.');
-      focusInput();
-    }
-  });
-}
 
 let humVolume=Math.pow(humSlider.value/100,2);
 let scrollVolume=scrollSlider.value/100;
@@ -854,7 +763,6 @@ function updateInput(){
   input.textContent=text;
   inputText=text;
   placeCaretAtEnd(input);
-  persistSessionState();
 }
 updateInput();
 loadConfig();
@@ -1464,7 +1372,6 @@ async function handleCommand(cmd){
   inputText='';
   updateInput();
   focusInput();
-  persistSessionState();
 }
 
 const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
@@ -1888,7 +1795,6 @@ async function showScreen(name){
       }
     }
   }
-  persistSessionState();
 }
 
 document.addEventListener('keydown',e=>{
@@ -1949,12 +1855,7 @@ powerButton.addEventListener('click',async()=>{
       hackingActive=false;
       hackingData=null;
       await loadConfig(cycle);
-      const restored=await restoreSessionStateIfAvailable();
-      if(!restored){
-        loadScrollSound().then(()=>{if(currentCycle===cycle) init(cycle);});
-      }else{
-        loadScrollSound();
-      }
+      loadScrollSound().then(()=>{if(currentCycle===cycle) init(cycle);});
     }
     powered=true;
   }else{
@@ -1964,7 +1865,6 @@ powerButton.addEventListener('click',async()=>{
     clearAllTimeouts();
     cancelWaits();
     typing=false;
-    persistSessionState();
     screenHistory=[];
     currentScreenName=null;
     currentOptions=[];
