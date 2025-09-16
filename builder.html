@@ -206,6 +206,19 @@
       justify-content:center;
       padding:0.5rem 1.25rem;
       font-weight:600;
+      max-width:100%;
+      min-width:0;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+    @media (min-width: 640px) {
+      #download-panel .download-box > .flex {
+        flex-wrap: wrap;
+      }
+      #download-panel .download-box #generate-feedback {
+        flex: 1 1 12rem;
+        min-width: 12rem;
+      }
     }
 
     /* Boot sequence reveal */
@@ -1250,20 +1263,34 @@ tabButtons.forEach((btn,i)=>{
   });
 });
 
+const HOVER_SOUND_SELECTOR='button, a[href], input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
+function findHoverSoundTarget(element){
+  if(!(element instanceof Element)) return null;
+  const candidate=element.closest(HOVER_SOUND_SELECTOR);
+  if(!candidate) return null;
+  if(!candidate.closest('#builder-wrapper')) return null;
+  if(candidate.matches(':disabled')) return null;
+  if(candidate.getAttribute('aria-disabled')==='true') return null;
+  return candidate;
+}
+
 document.addEventListener('mouseover',e=>{
-  const target=e.target;
-  if(!(target instanceof Element)) return;
-  if(target.dataset.hoverSoundPlayed) return;
+  const hoverTarget=findHoverSoundTarget(e.target);
+  if(!hoverTarget) return;
+  if(hoverTarget.dataset.hoverSoundPlayed) return;
   playSound('Pip/Highlight4.wav');
-  target.dataset.hoverSoundPlayed='1';
-  target.addEventListener('mouseleave',()=>{
-    delete target.dataset.hoverSoundPlayed;
-  },{once:true});
+  hoverTarget.dataset.hoverSoundPlayed='1';
+  const resetHoverSound=()=>{
+    delete hoverTarget.dataset.hoverSoundPlayed;
+  };
+  hoverTarget.addEventListener('mouseleave',resetHoverSound,{once:true});
+  hoverTarget.addEventListener('blur',resetHoverSound,{once:true});
 });
 document.addEventListener('focusin',e=>{
-  if(e.target instanceof Element){
-    playSound('Pip/Highlight4.wav');
-  }
+  const focusTarget=findHoverSoundTarget(e.target);
+  if(!focusTarget) return;
+  if(focusTarget.dataset.hoverSoundPlayed) return;
+  playSound('Pip/Highlight4.wav');
 });
 
 const darkToggle=document.getElementById('dark-toggle');
