@@ -8,6 +8,7 @@
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="builder-utils.js"></script>
   <style>
     @font-face{
@@ -274,7 +275,7 @@
                 </label>
               </div>
             </div>
-            <div v-show="screen.open" class="pl-6 items-container" :data-sidx="sIdx" :id="'items-'+screen.uid">
+            <div v-show="screen.open" class="pl-6 items-container" :data-sidx="sIdx" :data-suid="screen.uid" :id="'items-'+screen.uid">
               <template v-for="(item, iIdx) in screen.items">
                 <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded" :style="{backgroundColor: screen.color, borderColor: screen.color, color: screen.textColor}">
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
@@ -302,29 +303,33 @@
   <div v-show="activeTab==='boot'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Boot Sequence</legend>
-      <div v-for="(step, idx) in bootSequence" :key="step.uid" class="flex items-center flex-wrap gap-1 mb-1">
-        <textarea v-model="step.text" rows="2" cols="40" class="border rounded p-1 flex-1" placeholder="Boot text"></textarea>
-        <select v-model="step.type" class="border rounded p-1">
-          <option value="terminal">Terminal</option>
-          <option value="user">User</option>
-        </select>
-        <button type="button" @click="moveBootStepUp(bootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
-        <button type="button" @click="moveBootStepDown(bootSequence, idx)" :disabled="idx===bootSequence.length-1" class="action-btn">▼</button>
-        <button type="button" @click="removeBootStep(bootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+      <div id="boot-sequence-container">
+        <div v-for="(step, idx) in bootSequence" :key="step.uid" class="boot-item flex items-center flex-wrap gap-1 mb-1">
+          <textarea v-model="step.text" rows="2" cols="40" class="border rounded p-1 flex-1" placeholder="Boot text"></textarea>
+          <select v-model="step.type" class="border rounded p-1">
+            <option value="terminal">Terminal</option>
+            <option value="user">User</option>
+          </select>
+          <button type="button" @click="moveBootStepUp(bootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
+          <button type="button" @click="moveBootStepDown(bootSequence, idx)" :disabled="idx===bootSequence.length-1" class="action-btn">▼</button>
+          <button type="button" @click="removeBootStep(bootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+        </div>
       </div>
       <button type="button" @click="addBootStep(bootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Locked Boot Sequence</legend>
-      <div v-for="(step, idx) in lockedBootSequence" :key="step.uid" class="flex items-center flex-wrap gap-1 mb-1">
-        <textarea v-model="step.text" rows="2" cols="40" class="border rounded p-1 flex-1" placeholder="Boot text"></textarea>
-        <select v-model="step.type" class="border rounded p-1">
-          <option value="terminal">Terminal</option>
-          <option value="user">User</option>
-        </select>
-        <button type="button" @click="moveBootStepUp(lockedBootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
-        <button type="button" @click="moveBootStepDown(lockedBootSequence, idx)" :disabled="idx===lockedBootSequence.length-1" class="action-btn">▼</button>
-        <button type="button" @click="removeBootStep(lockedBootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+      <div id="locked-boot-sequence-container">
+        <div v-for="(step, idx) in lockedBootSequence" :key="step.uid" class="boot-item flex items-center flex-wrap gap-1 mb-1">
+          <textarea v-model="step.text" rows="2" cols="40" class="border rounded p-1 flex-1" placeholder="Boot text"></textarea>
+          <select v-model="step.type" class="border rounded p-1">
+            <option value="terminal">Terminal</option>
+            <option value="user">User</option>
+          </select>
+          <button type="button" @click="moveBootStepUp(lockedBootSequence, idx)" :disabled="idx===0" class="action-btn">▲</button>
+          <button type="button" @click="moveBootStepDown(lockedBootSequence, idx)" :disabled="idx===lockedBootSequence.length-1" class="action-btn">▼</button>
+          <button type="button" @click="removeBootStep(lockedBootSequence, idx)" class="action-btn"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+        </div>
       </div>
       <button type="button" @click="addBootStep(lockedBootSequence)" class="mt-2 px-2 py-1 border rounded">Add Entry</button>
     </fieldset>
@@ -332,22 +337,24 @@
   <div v-show="activeTab==='commands'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Commands</legend>
-      <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
-        <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
-        <input
-          v-model="cmd.screen"
-          :class="['border','rounded','p-1','w-32', invalidCommandScreenIds.has(cmd.uid) ? 'invalid-field' : '']"
-          placeholder="Screen ID"
-          :aria-invalid="invalidCommandScreenIds.has(cmd.uid) ? 'true' : null"
-          :title="invalidCommandScreenIds.has(cmd.uid) ? `Unknown screen "${(cmd.screen || '').trim()}"` : 'Screen ID'"
-        >
-        <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
-        <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
-        <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
-        <div class="flex gap-1">
-          <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="action-btn" title="Move up">▲</button>
-          <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="action-btn" title="Move down">▼</button>
-          <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+      <div id="commands-container">
+        <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="command-item flex items-center flex-wrap gap-2 mb-2">
+          <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
+          <input
+            v-model="cmd.screen"
+            :class="['border','rounded','p-1','w-32', invalidCommandScreenIds.has(cmd.uid) ? 'invalid-field' : '']"
+            placeholder="Screen ID"
+            :aria-invalid="invalidCommandScreenIds.has(cmd.uid) ? 'true' : null"
+            :title="invalidCommandScreenIds.has(cmd.uid) ? `Unknown screen "${(cmd.screen || '').trim()}"` : 'Screen ID'"
+          >
+          <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
+          <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
+          <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
+          <div class="flex gap-1">
+            <button type="button" @click="moveCommandUp(idx)" :disabled="idx===0" class="action-btn" title="Move up">▲</button>
+            <button type="button" @click="moveCommandDown(idx)" :disabled="idx===commands.length-1" class="action-btn" title="Move down">▼</button>
+            <button type="button" @click="removeCommand(idx)" class="action-btn" title="Remove command"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
+          </div>
         </div>
       </div>
       <button type="button" @click="addCommand" class="mt-2 action-btn">Add Command</button>
@@ -471,7 +478,8 @@ const app = Vue.createApp({
         hackTextColor: DEFAULT_TEXT_COLOR,
         hackBgColor: DEFAULT_BG_COLOR,
         hackBorderColor: DEFAULT_BORDER_COLOR,
-        hackingHeader: ''
+        hackingHeader: '',
+        sortables: []
       };
     },
   computed: {
@@ -593,6 +601,94 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
         },
         initSortables() {
+        const SortableLib = window.Sortable || (typeof Sortable !== 'undefined' ? Sortable : null);
+        if (!SortableLib) return;
+
+        if (!Array.isArray(this.sortables)) {
+          this.sortables = [];
+        }
+
+        this.sortables.forEach(instance => {
+          if (instance && typeof instance.destroy === 'function') {
+            instance.destroy();
+          }
+        });
+        this.sortables = [];
+
+        const baseOptions = {
+          animation: 150,
+          ghostClass: 'drag-ghost',
+          chosenClass: 'drag-chosen',
+          dragClass: 'dragging',
+          filter: 'textarea, input, select, button, label',
+          preventOnFilter: false
+        };
+
+        const reorder = (arr, oldIndex, newIndex) => {
+          if (!Array.isArray(arr)) return;
+          if (oldIndex === undefined || newIndex === undefined) return;
+          if (oldIndex === newIndex) return;
+          if (oldIndex < 0 || newIndex < 0) return;
+          if (oldIndex >= arr.length || newIndex >= arr.length) return;
+          const [moved] = arr.splice(oldIndex, 1);
+          if (typeof moved === 'undefined') return;
+          arr.splice(newIndex, 0, moved);
+        };
+
+        const createSortable = (el, opts = {}) => {
+          if (!el) return;
+          const sortable = new SortableLib(el, Object.assign({}, baseOptions, opts));
+          this.sortables.push(sortable);
+        };
+
+        createSortable(document.getElementById('screens-container'), {
+          draggable: '.screen',
+          handle: '.screen',
+          onEnd: evt => {
+            reorder(this.screens, evt.oldIndex, evt.newIndex);
+          }
+        });
+
+        document.querySelectorAll('.items-container').forEach(container => {
+          createSortable(container, {
+            draggable: '.menu-item',
+            onEnd: evt => {
+              const screenUid = evt.from && evt.from.dataset ? evt.from.dataset.suid : undefined;
+              if (!screenUid) return;
+              const screen = this.screens.find(scr => String(scr.uid) === screenUid);
+              if (!screen || !Array.isArray(screen.items)) return;
+              reorder(screen.items, evt.oldIndex, evt.newIndex);
+            }
+          });
+        });
+
+        createSortable(document.getElementById('boot-sequence-container'), {
+          draggable: '.boot-item',
+          onEnd: evt => {
+            reorder(this.bootSequence, evt.oldIndex, evt.newIndex);
+          }
+        });
+
+        createSortable(document.getElementById('locked-boot-sequence-container'), {
+          draggable: '.boot-item',
+          onEnd: evt => {
+            reorder(this.lockedBootSequence, evt.oldIndex, evt.newIndex);
+          }
+        });
+
+        createSortable(document.getElementById('commands-container'), {
+          draggable: '.command-item',
+          onEnd: evt => {
+            reorder(this.commands, evt.oldIndex, evt.newIndex);
+          }
+        });
+
+        createSortable(document.getElementById('difficulties-container'), {
+          draggable: '.difficulty-item',
+          onEnd: evt => {
+            reorder(this.difficulties, evt.oldIndex, evt.newIndex);
+          }
+        });
         },
       addDifficulty(d={name:'', wordCount:[1,1], length:[1,1]}) {
         this.difficulties.push({...d, open:false, uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
