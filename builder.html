@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <title>Terminal Config Builder</title>
   <script>
-    tailwind.config = { darkMode: 'class' }
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: 'class' };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -283,7 +284,7 @@
                     :class="['menu-screen','mr-1','border','rounded','p-1','w-24', invalidMenuItemScreenIds.has(item.uid) ? 'invalid-field' : '']"
                     placeholder="Screen id"
                     :aria-invalid="invalidMenuItemScreenIds.has(item.uid) ? 'true' : null"
-                    :title="invalidMenuItemScreenIds.has(item.uid) ? `Unknown screen "${(item.screen || '').trim()}"` : 'Screen id'"
+                    :title="menuItemScreenTitle(item)"
                   >
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
@@ -339,7 +340,7 @@
           :class="['border','rounded','p-1','w-32', invalidCommandScreenIds.has(cmd.uid) ? 'invalid-field' : '']"
           placeholder="Screen ID"
           :aria-invalid="invalidCommandScreenIds.has(cmd.uid) ? 'true' : null"
-          :title="invalidCommandScreenIds.has(cmd.uid) ? `Unknown screen "${(cmd.screen || '').trim()}"` : 'Screen ID'"
+          :title="commandScreenTitle(cmd)"
         >
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
@@ -580,6 +581,16 @@ const app = Vue.createApp({
           if (iIdx >= items.length - 1) return;
           [items[iIdx], items[iIdx + 1]] = [items[iIdx + 1], items[iIdx]];
           this.$nextTick(this.initSortables);
+        },
+        menuItemScreenTitle(item) {
+          if (!this.invalidMenuItemScreenIds.has(item.uid)) return 'Screen id';
+          const screen = (item.screen || '').trim();
+          return screen ? `Unknown screen "${screen}"` : 'Screen id';
+        },
+        commandScreenTitle(cmd) {
+          if (!this.invalidCommandScreenIds.has(cmd.uid)) return 'Screen ID';
+          const screen = (cmd.screen || '').trim();
+          return screen ? `Unknown screen "${screen}"` : 'Screen ID';
         },
         addBootStep(seq) {
         seq.push({text:'', type:'terminal', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
