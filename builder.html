@@ -186,6 +186,27 @@
     .dark #tabs-bar { border-bottom:2px solid var(--border-color); }
     .dark a { color: var(--text-color); }
     .dark #generate-feedback { color: var(--text-color); }
+    #download-panel .download-box {
+      border:2px solid #4b5563;
+      background-color:#f3f4f6;
+      border-radius:0.5rem;
+      padding:1rem;
+      box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    }
+    .dark #download-panel .download-box {
+      border:2px solid var(--border-color);
+      background-color:rgba(4,18,4,0.85);
+      box-shadow:0 0 12px rgba(0,255,0,0.25);
+    }
+    .download-box .download-btn {
+      white-space:normal;
+      text-align:center;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:0.5rem 1.25rem;
+      font-weight:600;
+    }
 
     /* Boot sequence reveal */
     #builder-wrapper.boot-load {
@@ -227,19 +248,25 @@
       <input id="download-name" v-model="downloadName" class="border rounded p-1 w-40" placeholder="config">
     </label>
     <button type="submit" class="top-line-btn" title="Generate the configuration file and enable downloading the JSON.">Generate Config</button>
-    <a
-      id="download-link"
-      :class="['text-blue-600 underline', downloadUrl ? '' : 'hidden']"
-      :download="downloadFileName"
-      :href="downloadUrl"
-      @click="handleDownloadClick"
-    >
-      Download {{ downloadFileName }}
-    </a>
     <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
     <a id="back-to-terminal" href="index.html" class="top-line-btn ml-auto" @click="handleBackToTerminal">Back to Terminal</a>
   </div>
-  <div id="generate-feedback" class="text-green-600 hidden mt-2"></div>
+  <div id="download-panel" class="hidden mt-4">
+    <div class="download-box">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <a
+          id="download-link"
+          :class="['top-line-btn download-btn w-full sm:w-auto', downloadUrl ? '' : 'hidden']"
+          :download="downloadFileName"
+          :href="downloadUrl"
+          @click="handleDownloadClick"
+        >
+          Download {{ downloadFileName }}
+        </a>
+        <div id="generate-feedback" class="text-green-600 hidden text-sm sm:text-base sm:text-right w-full sm:w-auto"></div>
+      </div>
+    </div>
+  </div>
   <input type="file" id="config-file" accept="application/json" class="hidden">
     <div id="tabs-bar" class="mb-4 flex gap-2 border-b border-gray-300 dark:border-gray-700">
       <button type="button" @click="activeTab='content'" :class="['tab-btn', activeTab==='content' ? 'tab-btn-active' : '']">Terminal Content</button>
@@ -698,11 +725,18 @@ const app = Vue.createApp({
           this.downloadUrl='';
         }
       },
+      setDownloadPanelVisible(visible){
+        const panel=document.getElementById('download-panel');
+        if(panel){
+          panel.classList.toggle('hidden', !visible);
+        }
+      },
       hideGenerationFeedback(){
         const feedback = document.getElementById('generate-feedback');
         if(feedback){
           feedback.classList.add('hidden');
         }
+        this.setDownloadPanelVisible(!!this.downloadUrl);
       },
       serializeBootSequence(seq){
         return JSON.stringify(seq.map(step=>({
@@ -963,6 +997,7 @@ const app = Vue.createApp({
         feedback.classList.remove('text-green-600');
         feedback.classList.add('text-red-600');
         this.clearDownloadUrl();
+        this.setDownloadPanelVisible(true);
       },
       showGenerationSuccess(message) {
         const feedback = document.getElementById('generate-feedback');
@@ -970,6 +1005,7 @@ const app = Vue.createApp({
         feedback.classList.remove('hidden');
         feedback.classList.remove('text-red-600');
         feedback.classList.add('text-green-600');
+        this.setDownloadPanelVisible(true);
       },
       handleDownloadClick(){
         if(!this.downloadUrl) return;
@@ -1215,15 +1251,19 @@ tabButtons.forEach((btn,i)=>{
 });
 
 document.addEventListener('mouseover',e=>{
-  const btn=e.target.closest('button, a.top-line-btn');
-  if(!btn||btn.dataset.hoverSoundPlayed) return;
+  const target=e.target;
+  if(!(target instanceof Element)) return;
+  if(target.dataset.hoverSoundPlayed) return;
   playSound('Pip/Highlight4.wav');
-  btn.dataset.hoverSoundPlayed='1';
-  btn.addEventListener('mouseleave',()=>delete btn.dataset.hoverSoundPlayed,{once:true});
+  target.dataset.hoverSoundPlayed='1';
+  target.addEventListener('mouseleave',()=>{
+    delete target.dataset.hoverSoundPlayed;
+  },{once:true});
 });
 document.addEventListener('focusin',e=>{
-  const btn=e.target.closest('button, a.top-line-btn');
-  if(btn) playSound('Pip/Highlight4.wav');
+  if(e.target instanceof Element){
+    playSound('Pip/Highlight4.wav');
+  }
 });
 
 const darkToggle=document.getElementById('dark-toggle');
