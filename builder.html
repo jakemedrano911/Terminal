@@ -8,6 +8,7 @@
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="builder-utils.js"></script>
   <style>
     @font-face{
       font-family:"FSEX300";
@@ -83,6 +84,14 @@
     }
     .dragging {
       user-select: none;
+    }
+    .invalid-field {
+      border-color:#dc2626 !important;
+      box-shadow:0 0 0 1px rgba(220,38,38,0.6);
+    }
+    .dark .invalid-field {
+      border-color:#f87171 !important;
+      box-shadow:0 0 0 1px rgba(248,113,113,0.7);
     }
       .action-btn {
         border:2px solid #9ca3af;
@@ -269,7 +278,13 @@
               <template v-for="(item, iIdx) in screen.items">
                 <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded" :style="{backgroundColor: screen.color, borderColor: screen.color, color: screen.textColor}">
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
-                  <input v-model="item.screen" class="menu-screen mr-1 border rounded p-1 w-24" placeholder="Screen id">
+                  <input
+                    v-model="item.screen"
+                    :class="['menu-screen','mr-1','border','rounded','p-1','w-24', invalidMenuItemScreenIds.has(item.uid) ? 'invalid-field' : '']"
+                    placeholder="Screen id"
+                    :aria-invalid="invalidMenuItemScreenIds.has(item.uid) ? 'true' : null"
+                    :title="invalidMenuItemScreenIds.has(item.uid) ? `Unknown screen "${(item.screen || '').trim()}"` : 'Screen id'"
+                  >
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
@@ -319,7 +334,13 @@
       <legend class="flex items-center gap-1">Commands</legend>
       <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
-        <input v-model="cmd.screen" class="border rounded p-1 w-32" placeholder="Screen ID">
+        <input
+          v-model="cmd.screen"
+          :class="['border','rounded','p-1','w-32', invalidCommandScreenIds.has(cmd.uid) ? 'invalid-field' : '']"
+          placeholder="Screen ID"
+          :aria-invalid="invalidCommandScreenIds.has(cmd.uid) ? 'true' : null"
+          :title="invalidCommandScreenIds.has(cmd.uid) ? `Unknown screen "${(cmd.screen || '').trim()}"` : 'Screen ID'"
+        >
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
@@ -459,6 +480,15 @@ const app = Vue.createApp({
     },
     difficultyTitle() {
       return this.difficulties.map(d => `${d.name} (${d.length[0]}-${d.length[1]} letters, ${d.wordCount[0]}-${d.wordCount[1]} words)`).join('; ') + '; Random selects any difficulty.';
+    },
+    screenReferenceValidation() {
+      return findInvalidScreenReferences(this.screens, this.commands);
+    },
+    invalidMenuItemScreenIds() {
+      return this.screenReferenceValidation.invalidMenuItemIds;
+    },
+    invalidCommandScreenIds() {
+      return this.screenReferenceValidation.invalidCommandIds;
     }
   },
   watch: {
@@ -638,9 +668,47 @@ const app = Vue.createApp({
         dudWordsEl.value = (config.hacking?.dudWords || []).join(', ');
         this.$nextTick(this.initSortables);
       },
+      buildMissingTargetMessage(missingTargets) {
+        const details = [];
+        missingTargets.forEach((info, target) => {
+          const parts = [];
+          if(info.menuItems){
+            parts.push(`${info.menuItems} menu item${info.menuItems === 1 ? '' : 's'}`);
+          }
+          if(info.commands){
+            parts.push(`${info.commands} command${info.commands === 1 ? '' : 's'}`);
+          }
+          details.push(`"${target}" (${parts.join(' and ')})`);
+        });
+        if(!details.length) return '';
+        const suffix = details.length === 1 ? '' : 's';
+        return `Unknown screen reference${suffix}: ${details.join(', ')}.`;
+      },
+      showGenerationError(message) {
+        const feedback = document.getElementById('generate-feedback');
+        feedback.textContent = message || 'Resolve highlighted screen references before generating.';
+        feedback.classList.remove('hidden');
+        feedback.classList.remove('text-green-600');
+        feedback.classList.add('text-red-600');
+        const dl = document.getElementById('download-link');
+        dl.classList.add('hidden');
+      },
+      showGenerationSuccess(message) {
+        const feedback = document.getElementById('generate-feedback');
+        feedback.textContent = message;
+        feedback.classList.remove('hidden');
+        feedback.classList.remove('text-red-600');
+        feedback.classList.add('text-green-600');
+      },
       handleSubmit() {
       if (!validateDudWords()) {
         dudWordsEl.reportValidity();
+        return;
+      }
+      const validation = this.screenReferenceValidation;
+      if (validation.missingTargets.size) {
+        const message = this.buildMissingTargetMessage(validation.missingTargets);
+        this.showGenerationError(message);
         return;
       }
       const rawTitles = document.getElementById('titles').value.split('\n');
@@ -728,9 +796,7 @@ const app = Vue.createApp({
       const dl = document.getElementById('download-link');
       dl.href = url;
       dl.classList.remove('hidden');
-      const feedback = document.getElementById('generate-feedback');
-      feedback.textContent = `Generated ${new Date().toLocaleTimeString()}`;
-      feedback.classList.remove('hidden');
+      this.showGenerationSuccess(`Generated ${new Date().toLocaleTimeString()}`);
     }
   },
   mounted() {
