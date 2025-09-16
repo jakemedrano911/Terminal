@@ -219,16 +219,28 @@
 <body class="m-0 p-4">
 <div id="builder-wrapper" class="max-w-4xl mx-auto">
 <h1 class="text-2xl font-bold mb-4">Config Builder</h1>
-<div class="mb-4 flex gap-2 items-center w-full">
-  <button type="button" id="load-config" class="top-line-btn" title="Load configuration from a JSON file such as one previously exported.">Load Config</button>
-  <button type="submit" form="builder-form" class="top-line-btn" title="Generate the configuration file and enable downloading config.json">Generate Config</button>
-  <a id="download-link" class="hidden text-blue-600 underline" download="config.json">Download config.json</a>
-  <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
-  <a id="back-to-terminal" href="index.html" class="top-line-btn ml-auto">Back to Terminal</a>
-</div>
-<div id="generate-feedback" class="text-green-600 hidden mt-2"></div>
-<input type="file" id="config-file" accept="application/json" class="hidden">
 <form id="builder-form">
+  <div class="mb-4 flex gap-2 items-center w-full flex-wrap">
+    <button type="button" id="load-config" class="top-line-btn" title="Load configuration from a JSON file such as one previously exported.">Load Config</button>
+    <label for="download-name" class="flex items-center gap-2" title="Name used for the generated JSON file. The .json extension is added automatically.">
+      File Name:
+      <input id="download-name" v-model="downloadName" class="border rounded p-1 w-40" placeholder="config">
+    </label>
+    <button type="submit" class="top-line-btn" title="Generate the configuration file and enable downloading the JSON.">Generate Config</button>
+    <a
+      id="download-link"
+      :class="['text-blue-600 underline', downloadUrl ? '' : 'hidden']"
+      :download="downloadFileName"
+      :href="downloadUrl"
+      @click="handleDownloadClick"
+    >
+      Download {{ downloadFileName }}
+    </a>
+    <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
+    <a id="back-to-terminal" href="index.html" class="top-line-btn ml-auto" @click="handleBackToTerminal">Back to Terminal</a>
+  </div>
+  <div id="generate-feedback" class="text-green-600 hidden mt-2"></div>
+  <input type="file" id="config-file" accept="application/json" class="hidden">
     <div id="tabs-bar" class="mb-4 flex gap-2 border-b border-gray-300 dark:border-gray-700">
       <button type="button" @click="activeTab='content'" :class="['tab-btn', activeTab==='content' ? 'tab-btn-active' : '']">Terminal Content</button>
       <button type="button" @click="activeTab='boot'" :class="['tab-btn', activeTab==='boot' ? 'tab-btn-active' : '']">Boot</button>
@@ -438,6 +450,25 @@ const DEFAULT_TEXT_COLOR = '#7aff7a';
 const DEFAULT_BG_COLOR = '#041204';
 const DEFAULT_BORDER_COLOR = '#008800';
 const BASE_SCREEN_COLOR = '#0c2c5f';
+const DEFAULT_DOWNLOAD_BASENAME = 'config';
+const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/g;
+
+function sanitizeDownloadBaseName(name){
+  const trimmed=(name||'').trim();
+  if(!trimmed) return DEFAULT_DOWNLOAD_BASENAME;
+  const cleaned=trimmed.replace(INVALID_FILENAME_CHARS,'').replace(/\s+/g,' ');
+  const withoutLeadingDots=cleaned.replace(/^\.+/, '');
+  const withoutTrailingDotsOrSpaces=withoutLeadingDots.replace(/[. ]+$/, '');
+  return withoutTrailingDotsOrSpaces || DEFAULT_DOWNLOAD_BASENAME;
+}
+
+function buildDownloadFileName(name){
+  let base=sanitizeDownloadBaseName(name);
+  if(!base.toLowerCase().endsWith('.json')){
+    base=`${base}.json`;
+  }
+  return base;
+}
 
 // Adjust the base color by a given amount and introduce a slight random
 // variation in each channel so that successive screens are easier to
@@ -458,6 +489,8 @@ const app = Vue.createApp({
   data() {
     return {
         activeTab: 'content',
+        downloadName: DEFAULT_DOWNLOAD_BASENAME,
+        downloadUrl: '',
         screens: [],
         bootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
         lockedBootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
@@ -479,10 +512,24 @@ const app = Vue.createApp({
         hackBgColor: DEFAULT_BG_COLOR,
         hackBorderColor: DEFAULT_BORDER_COLOR,
         hackingHeader: '',
-        customSoundDir: ''
+        customSoundDir: '',
+        hasUnsavedChanges: false,
+        suppressUnsavedTracking: 0,
+        domUnsavedListeners: [],
+        beforeUnloadHandler: null,
+        collectionSnapshots: {
+          screens: '',
+          commands: '',
+          bootSequence: '',
+          lockedBootSequence: '',
+          difficulties: ''
+        }
       };
-    },
+  },
   computed: {
+    downloadFileName(){
+      return buildDownloadFileName(this.downloadName);
+    },
     difficultyOptions() {
       return ['Random', ...this.difficulties.map(d => d.name)];
     },
@@ -500,11 +547,212 @@ const app = Vue.createApp({
     }
   },
   watch: {
-    textColor: 'applyTheme',
-    bgColor: 'applyTheme',
-    borderColor: 'applyTheme'
+    textColor: {
+      handler() {
+        this.applyTheme();
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    bgColor: {
+      handler() {
+        this.applyTheme();
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    borderColor: {
+      handler() {
+        this.applyTheme();
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    downloadName: {
+      handler() {
+        this.markUnsaved({ skipClear: true });
+      },
+      flush: 'sync'
+    },
+    screens: {
+      handler() {
+        const snapshot = this.serializeScreens();
+        const changed = snapshot !== this.collectionSnapshots.screens;
+        this.collectionSnapshots.screens = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    commands: {
+      handler() {
+        const snapshot = this.serializeCommands();
+        const changed = snapshot !== this.collectionSnapshots.commands;
+        this.collectionSnapshots.commands = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    bootSequence: {
+      handler() {
+        const snapshot = this.serializeBootSequence(this.bootSequence);
+        const changed = snapshot !== this.collectionSnapshots.bootSequence;
+        this.collectionSnapshots.bootSequence = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    lockedBootSequence: {
+      handler() {
+        const snapshot = this.serializeBootSequence(this.lockedBootSequence);
+        const changed = snapshot !== this.collectionSnapshots.lockedBootSequence;
+        this.collectionSnapshots.lockedBootSequence = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    difficulties: {
+      handler() {
+        const snapshot = this.serializeDifficulties();
+        const changed = snapshot !== this.collectionSnapshots.difficulties;
+        this.collectionSnapshots.difficulties = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    difficultyChoice: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackTextColor: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackBgColor: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackBorderColor: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackingHeader: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    customSoundDir: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    }
   },
   methods: {
+      runWithoutUnsavedTracking(fn){
+        this.suppressUnsavedTracking++;
+        try {
+          if (typeof fn === 'function') {
+            fn();
+          }
+        } finally {
+          Promise.resolve().then(() => {
+            this.suppressUnsavedTracking = Math.max(0, this.suppressUnsavedTracking - 1);
+          });
+        }
+      },
+      markUnsaved(options={}){
+        if(this.suppressUnsavedTracking) return;
+        const { skipClear = false } = options;
+        if(!skipClear){
+          this.clearDownloadUrl();
+        }
+        this.hideGenerationFeedback();
+        this.hasUnsavedChanges = true;
+      },
+      resetUnsavedChanges(){
+        this.refreshCollectionSnapshots();
+        this.hasUnsavedChanges = false;
+      },
+      clearDownloadUrl(){
+        if(this.downloadUrl){
+          URL.revokeObjectURL(this.downloadUrl);
+          this.downloadUrl='';
+        }
+      },
+      hideGenerationFeedback(){
+        const feedback = document.getElementById('generate-feedback');
+        if(feedback){
+          feedback.classList.add('hidden');
+        }
+      },
+      serializeBootSequence(seq){
+        return JSON.stringify(seq.map(step=>({
+          text: step.text,
+          type: step.type
+        })));
+      },
+      serializeScreens(){
+        return JSON.stringify(this.screens.map(scr=>({
+          id: scr.id,
+          textColor: scr.textColor,
+          bgColor: scr.bgColor,
+          borderColor: scr.borderColor,
+          items: scr.items.map(it=>({
+            text: it.text,
+            screen: it.screen,
+            command: it.command
+          }))
+        })));
+      },
+      serializeCommands(){
+        return JSON.stringify(this.commands.map(cmd=>({
+          name: cmd.name,
+          screen: cmd.screen,
+          command: cmd.command,
+          help: !!cmd.help,
+          hacking: !!cmd.hacking,
+          action: cmd.action
+        })));
+      },
+      serializeDifficulties(){
+        return JSON.stringify(this.difficulties.map(diff=>({
+          name: diff.name,
+          wordCount: Array.isArray(diff.wordCount) ? [...diff.wordCount] : diff.wordCount,
+          length: Array.isArray(diff.length) ? [...diff.length] : diff.length
+        })));
+      },
+      refreshCollectionSnapshots(){
+        this.collectionSnapshots.screens = this.serializeScreens();
+        this.collectionSnapshots.commands = this.serializeCommands();
+        this.collectionSnapshots.bootSequence = this.serializeBootSequence(this.bootSequence);
+        this.collectionSnapshots.lockedBootSequence = this.serializeBootSequence(this.lockedBootSequence);
+        this.collectionSnapshots.difficulties = this.serializeDifficulties();
+      },
+      updateDownloadNameFromFile(fileName=''){
+        this.runWithoutUnsavedTracking(()=>{
+          const base=(fileName||'').replace(/\.json$/i,'');
+          this.downloadName=sanitizeDownloadBaseName(base);
+        });
+      },
       applyTheme() {
         const root = document.documentElement;
         root.style.setProperty('--text-color', this.textColor || DEFAULT_TEXT_COLOR);
@@ -605,11 +853,11 @@ const app = Vue.createApp({
         [seq[idx-1], seq[idx]] = [seq[idx], seq[idx-1]];
         this.$nextTick(this.initSortables);
         },
-        moveBootStepDown(seq, idx) {
+      moveBootStepDown(seq, idx) {
         if(idx>=seq.length-1) return;
         [seq[idx], seq[idx+1]] = [seq[idx+1], seq[idx]];
         this.$nextTick(this.initSortables);
-        },
+      },
         initSortables() {
         },
       addDifficulty(d={name:'', wordCount:[1,1], length:[1,1]}) {
@@ -621,71 +869,76 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
       },
       loadConfig(config) {
-        document.getElementById('titles').value = (config.titleLines || []).join('\n');
-        document.getElementById('headers').value = (config.headerLines || []).join('\n');
-        this.bootSequence = (config.bootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
-        this.lockedBootSequence = (config.lockedBootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
-        if(!this.bootSequence.length) this.bootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-        if(!this.lockedBootSequence.length) this.lockedBootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-        this.screens = [];
-        this.commands = [];
-        const style = config.style || {};
-        const globalText = style.textColor || DEFAULT_TEXT_COLOR;
-        const globalBg = style.backgroundColor || DEFAULT_BG_COLOR;
-        const globalBorder = style.borderColor || DEFAULT_BORDER_COLOR;
-        this.textColor = globalText;
-        this.bgColor = globalBg;
-        this.borderColor = globalBorder;
-        const hackingStyle = config.hackingStyle || {};
-        this.hackTextColor = hackingStyle.textColor || globalText;
-        this.hackBgColor = hackingStyle.backgroundColor || globalBg;
-        this.hackBorderColor = hackingStyle.borderColor || globalBorder;
-        this.hackingHeader = (config.hacking && config.hacking.header) || '';
-        this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
-        Object.entries(config.screens || {}).forEach(([id, data]) => {
-          const screen = {id, color:'#0c2c5f', items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
-          const items = Array.isArray(data) ? data : (data.items || []);
-          if(!Array.isArray(data) && data.style){
-            if(data.style.textColor) screen.textColor = data.style.textColor;
-            if(data.style.backgroundColor) screen.bgColor = data.style.backgroundColor;
-            if(data.style.borderColor) screen.borderColor = data.style.borderColor;
-          }
-          items.forEach(item=>{
-            if (typeof item === 'string') {
-              screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-            } else {
-              screen.items.push({
-                text: item.text || '',
-                screen: item.screen || '',
-                command: item.command || '',
-                uid: crypto.randomUUID?crypto.randomUUID():Math.random()
-              });
+        this.runWithoutUnsavedTracking(()=>{
+          this.clearDownloadUrl();
+          this.hideGenerationFeedback();
+          document.getElementById('titles').value = (config.titleLines || []).join('\n');
+          document.getElementById('headers').value = (config.headerLines || []).join('\n');
+          this.bootSequence = (config.bootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
+          this.lockedBootSequence = (config.lockedBootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
+          if(!this.bootSequence.length) this.bootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+          if(!this.lockedBootSequence.length) this.lockedBootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+          this.screens = [];
+          this.commands = [];
+          const style = config.style || {};
+          const globalText = style.textColor || DEFAULT_TEXT_COLOR;
+          const globalBg = style.backgroundColor || DEFAULT_BG_COLOR;
+          const globalBorder = style.borderColor || DEFAULT_BORDER_COLOR;
+          this.textColor = globalText;
+          this.bgColor = globalBg;
+          this.borderColor = globalBorder;
+          const hackingStyle = config.hackingStyle || {};
+          this.hackTextColor = hackingStyle.textColor || globalText;
+          this.hackBgColor = hackingStyle.backgroundColor || globalBg;
+          this.hackBorderColor = hackingStyle.borderColor || globalBorder;
+          this.hackingHeader = (config.hacking && config.hacking.header) || '';
+          this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
+          Object.entries(config.screens || {}).forEach(([id, data]) => {
+            const screen = {id, color:'#0c2c5f', items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
+            const items = Array.isArray(data) ? data : (data.items || []);
+            if(!Array.isArray(data) && data.style){
+              if(data.style.textColor) screen.textColor = data.style.textColor;
+              if(data.style.backgroundColor) screen.bgColor = data.style.backgroundColor;
+              if(data.style.borderColor) screen.borderColor = data.style.borderColor;
             }
+            items.forEach(item=>{
+              if (typeof item === 'string') {
+                screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+              } else {
+                screen.items.push({
+                  text: item.text || '',
+                  screen: item.screen || '',
+                  command: item.command || '',
+                  uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+                });
+              }
+            });
+            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+            this.screens.push(screen);
           });
-          if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-          this.screens.push(screen);
-        });
-        Object.entries(config.commands || {}).forEach(([name, info])=>{
-          this.commands.push({
-            name,
-            screen: info.screen || '',
-            command: info.command || '',
-            help: !!info.help,
-            hacking: !!info.hacking,
-            action: info.action || '',
-            uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+          Object.entries(config.commands || {}).forEach(([name, info])=>{
+            this.commands.push({
+              name,
+              screen: info.screen || '',
+              command: info.command || '',
+              help: !!info.help,
+              hacking: !!info.hacking,
+              action: info.action || '',
+              uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+            });
           });
+          document.getElementById('locked').checked = config.locked || false;
+          const diffs = config.hacking?.difficulties || defaultDifficulties;
+          this.difficulties = [];
+          diffs.forEach(d=>this.addDifficulty(d));
+          this.difficultyChoice = config.hacking?.difficulty ?? 'Random';
+          attemptsEl.value = config.hacking?.attempts ?? 4;
+          maxAttemptsEl.value = config.hacking?.maxAttempts ?? 4;
+          passwordEl.value = config.hacking?.password || '';
+          dudWordsEl.value = (config.hacking?.dudWords || []).join(', ');
+          this.$nextTick(this.initSortables);
         });
-        document.getElementById('locked').checked = config.locked || false;
-        const diffs = config.hacking?.difficulties || defaultDifficulties;
-        this.difficulties = [];
-        diffs.forEach(d=>this.addDifficulty(d));
-        this.difficultyChoice = config.hacking?.difficulty ?? 'Random';
-        attemptsEl.value = config.hacking?.attempts ?? 4;
-        maxAttemptsEl.value = config.hacking?.maxAttempts ?? 4;
-        passwordEl.value = config.hacking?.password || '';
-        dudWordsEl.value = (config.hacking?.dudWords || []).join(', ');
-        this.$nextTick(this.initSortables);
+        this.resetUnsavedChanges();
       },
       buildMissingTargetMessage(missingTargets) {
         const details = [];
@@ -709,8 +962,7 @@ const app = Vue.createApp({
         feedback.classList.remove('hidden');
         feedback.classList.remove('text-green-600');
         feedback.classList.add('text-red-600');
-        const dl = document.getElementById('download-link');
-        dl.classList.add('hidden');
+        this.clearDownloadUrl();
       },
       showGenerationSuccess(message) {
         const feedback = document.getElementById('generate-feedback');
@@ -718,6 +970,59 @@ const app = Vue.createApp({
         feedback.classList.remove('hidden');
         feedback.classList.remove('text-red-600');
         feedback.classList.add('text-green-600');
+      },
+      handleDownloadClick(){
+        if(!this.downloadUrl) return;
+        this.resetUnsavedChanges();
+      },
+      confirmNavigation(message){
+        if(!this.hasUnsavedChanges) return true;
+        const prompt = message || 'You have unsaved changes. Continue without exporting your configuration?';
+        return window.confirm(prompt);
+      },
+      handleBackToTerminal(event){
+        if(event && (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1)){
+          return;
+        }
+        if(event) event.preventDefault();
+        if(!this.confirmNavigation()) return;
+        const href = event?.currentTarget?.getAttribute('href') || 'index.html';
+        const go=()=>{ window.location.href = href; };
+        if(typeof playSound === 'function'){
+          const audio=playSound('Pip/select3.wav');
+          if(audio && typeof audio.addEventListener === 'function'){
+            audio.addEventListener('ended', go, {once:true});
+            setTimeout(go,150);
+            return;
+          }
+        }
+        go();
+      },
+      handleBeforeUnload(event){
+        if(this.hasUnsavedChanges){
+          event.preventDefault();
+          event.returnValue='';
+        }
+      },
+      setupUnsavedTracking(){
+        const tracked=[
+          {id:'titles', event:'input'},
+          {id:'headers', event:'input'},
+          {id:'attempts', event:'input'},
+          {id:'max-attempts', event:'input'},
+          {id:'password', event:'input'},
+          {id:'dud-words', event:'input'},
+          {id:'locked', event:'change'}
+        ];
+        tracked.forEach(({id,event})=>{
+          const el=document.getElementById(id);
+          if(!el) return;
+          const handler=()=>this.markUnsaved();
+          el.addEventListener(event,handler);
+          this.domUnsavedListeners.push({el,event,handler});
+        });
+        this.beforeUnloadHandler=(e)=>this.handleBeforeUnload(e);
+        window.addEventListener('beforeunload', this.beforeUnloadHandler);
       },
       handleSubmit() {
       if (!validateDudWords()) {
@@ -799,6 +1104,9 @@ const app = Vue.createApp({
       if (dudWords.length) hacking.dudWords = dudWords;
       if (this.hackingHeader) hacking.header = this.hackingHeader;
       const customSoundDir = (this.customSoundDir || '').trim();
+      this.runWithoutUnsavedTracking(()=>{
+        this.downloadName = sanitizeDownloadBaseName(this.downloadName);
+      });
       const config = {
         titleLines: titles,
         headerLines: headers,
@@ -814,17 +1122,37 @@ const app = Vue.createApp({
       if(Object.keys(commandsObj).length) config.commands = commandsObj;
       const blob = new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'});
       const url = URL.createObjectURL(blob);
-      const dl = document.getElementById('download-link');
-      dl.href = url;
-      dl.classList.remove('hidden');
-      this.showGenerationSuccess(`Generated ${new Date().toLocaleTimeString()}`);
+      const fileName = this.downloadFileName;
+      this.clearDownloadUrl();
+      this.downloadUrl = url;
+      this.showGenerationSuccess(`Generated ${fileName} at ${new Date().toLocaleTimeString()}`);
     }
   },
   mounted() {
-    this.addScreen('menu');
-    defaultDifficulties.forEach(d=>this.addDifficulty(d));
+    this.runWithoutUnsavedTracking(()=>{
+      this.addScreen('menu');
+      defaultDifficulties.forEach(d=>this.addDifficulty(d));
+    });
     this.$nextTick(this.initSortables);
     this.applyTheme();
+    this.setupUnsavedTracking();
+    this.resetUnsavedChanges();
+  },
+  beforeUnmount(){
+    if(this.downloadUrl){
+      URL.revokeObjectURL(this.downloadUrl);
+      this.downloadUrl='';
+    }
+    if(this.beforeUnloadHandler){
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler=null;
+    }
+    if(Array.isArray(this.domUnsavedListeners)){
+      this.domUnsavedListeners.forEach(({el,event,handler})=>{
+        if(el && handler) el.removeEventListener(event,handler);
+      });
+      this.domUnsavedListeners=[];
+    }
   }
 });
 
@@ -838,12 +1166,18 @@ document.getElementById('load-config').addEventListener('click', () => document.
 document.getElementById('config-file').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
+  if (vm.hasUnsavedChanges && !vm.confirmNavigation('You have unsaved changes that will be replaced by the loaded configuration. Continue?')) {
+    e.target.value = '';
+    return;
+  }
   const reader = new FileReader();
     reader.onload = () => {
       const config = JSON.parse(reader.result);
       vm.loadConfig(config);
+      vm.updateDownloadNameFromFile(file.name);
     };
   reader.readAsText(file);
+  e.target.value = '';
 });
 
 function playSound(src){
@@ -915,15 +1249,6 @@ document.addEventListener('click',e=>{
 const backSelectPreload=new Audio('Pip/select3.wav');
 backSelectPreload.preload='auto';
 backSelectPreload.load();
-
-// Play select sound and navigate after it finishes
-document.getElementById('back-to-terminal').addEventListener('click',e=>{
-  e.preventDefault();
-  const audio=playSound('Pip/select3.wav');
-  const go=()=>{ window.location.href='index.html'; };
-  audio.addEventListener('ended',go,{once:true});
-  setTimeout(go,150);
-});
 
 const passwordEl = document.getElementById('password');
 const dudWordsEl = document.getElementById('dud-words');
