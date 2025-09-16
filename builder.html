@@ -416,6 +416,12 @@
         <input type="text" id="bg-color-hex" class="ml-2 border rounded p-1 w-24" v-model="bgColor">
       </label>
     </fieldset>
+    <fieldset class="p-4 border rounded-lg shadow" title="Configure audio options.">
+      <legend class="flex items-center gap-1">Audio</legend>
+      <label class="block" title="Directory scanned for additional enter key audio clips.">Custom Sound Directory:
+        <input type="text" class="ml-2 border rounded p-1 w-full max-w-xs" v-model="customSoundDir" placeholder="e.g. sounds/custom">
+      </label>
+    </fieldset>
   </div>
 </form>
 </div>
@@ -471,7 +477,8 @@ const app = Vue.createApp({
         hackTextColor: DEFAULT_TEXT_COLOR,
         hackBgColor: DEFAULT_BG_COLOR,
         hackBorderColor: DEFAULT_BORDER_COLOR,
-        hackingHeader: ''
+        hackingHeader: '',
+        customSoundDir: ''
       };
     },
   computed: {
@@ -623,6 +630,7 @@ const app = Vue.createApp({
         this.hackBgColor = hackingStyle.backgroundColor || globalBg;
         this.hackBorderColor = hackingStyle.borderColor || globalBorder;
         this.hackingHeader = (config.hacking && config.hacking.header) || '';
+        this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
         Object.entries(config.screens || {}).forEach(([id, data]) => {
           const screen = {id, color:'#0c2c5f', items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
           const items = Array.isArray(data) ? data : (data.items || []);
@@ -779,6 +787,7 @@ const app = Vue.createApp({
       if (password) hacking.password = password;
       if (dudWords.length) hacking.dudWords = dudWords;
       if (this.hackingHeader) hacking.header = this.hackingHeader;
+      const customSoundDir = (this.customSoundDir || '').trim();
       const config = {
         titleLines: titles,
         headerLines: headers,
@@ -788,6 +797,7 @@ const app = Vue.createApp({
         style,
         hackingStyle,
         locked,
+        customSoundDir,
         hacking
       };
       if(Object.keys(commandsObj).length) config.commands = commandsObj;
