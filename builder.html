@@ -1264,14 +1264,19 @@ const app = Vue.createApp({
             });
           });
           document.getElementById('locked').checked = config.locked || false;
-          const diffs = config.hacking?.difficulties || defaultDifficulties;
+          const hackingConfig = (config && typeof config.hacking === 'object') ? config.hacking : {};
+          const diffs = Array.isArray(hackingConfig.difficulties) ? hackingConfig.difficulties : defaultDifficulties;
           this.difficulties = [];
           diffs.forEach(d=>this.addDifficulty(d));
-          this.difficultyChoice = config.hacking?.difficulty ?? 'Random';
-          attemptsEl.value = config.hacking?.attempts ?? 4;
-          maxAttemptsEl.value = config.hacking?.maxAttempts ?? 4;
-          passwordEl.value = config.hacking?.password || '';
-          dudWordsEl.value = (config.hacking?.dudWords || []).join(', ');
+          const selectedDifficulty = hackingConfig.difficulty;
+          this.difficultyChoice = selectedDifficulty == null ? 'Random' : selectedDifficulty;
+          const attemptsValue = hackingConfig.attempts;
+          attemptsEl.value = attemptsValue == null ? 4 : attemptsValue;
+          const maxAttemptsValue = hackingConfig.maxAttempts;
+          maxAttemptsEl.value = maxAttemptsValue == null ? 4 : maxAttemptsValue;
+          passwordEl.value = hackingConfig.password || '';
+          const dudWords = Array.isArray(hackingConfig.dudWords) ? hackingConfig.dudWords : [];
+          dudWordsEl.value = dudWords.join(', ');
           this.$nextTick(this.initSortables);
         });
         this.resetUnsavedChanges();
@@ -1328,7 +1333,10 @@ const app = Vue.createApp({
         }
         if(event) event.preventDefault();
         if(!this.confirmNavigation()) return;
-        const href = event?.currentTarget?.getAttribute('href') || 'index.html';
+        const hrefTarget = event && event.currentTarget && typeof event.currentTarget.getAttribute === 'function'
+          ? event.currentTarget.getAttribute('href')
+          : null;
+        const href = hrefTarget || 'index.html';
         const go=()=>{ window.location.href = href; };
         if(typeof playSound === 'function'){
           const audio=playSound('Pip/select3.wav');
