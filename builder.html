@@ -226,8 +226,9 @@
         flex-wrap: wrap;
       }
       #download-panel .download-box #generate-feedback {
-        flex: 1 1 12rem;
-        min-width: 12rem;
+        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 100%;
       }
     }
 
@@ -288,7 +289,7 @@
         </a>
         <div
           id="generate-feedback"
-          class="text-green-600 hidden text-sm sm:text-base text-left w-full"
+          class="text-green-600 hidden text-sm sm:text-base text-left self-start max-w-full inline-flex flex-wrap"
           role="status"
           aria-live="polite"
         ></div>
