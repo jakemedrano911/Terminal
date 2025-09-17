@@ -632,6 +632,17 @@ const SOUND_FIELD_DEFINITIONS = [
 ];
 const SOUND_FIELD_KEYS = SOUND_FIELD_DEFINITIONS.map(def => def.key);
 
+function createUid(){
+  if(typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'){
+    try{
+      return crypto.randomUUID();
+    }catch(e){
+      // Ignore and fall back to Math.random
+    }
+  }
+  return Math.random().toString(36).slice(2);
+}
+
 function createEmptySoundSettings(){
   const settings={};
   SOUND_FIELD_KEYS.forEach(key=>{settings[key]='';});
@@ -756,15 +767,15 @@ const app = Vue.createApp({
         downloadName: DEFAULT_DOWNLOAD_BASENAME,
         downloadUrl: '',
         screens: [],
-        bootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
-        lockedBootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
+        bootSequence:[{text:'',type:'terminal',uid:createUid()}],
+        lockedBootSequence:[{text:'',type:'terminal',uid:createUid()}],
         commands: [
-          {name:'back',screen:'',command:'',sound:'',help:false,hacking:false,action:'back',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'help',screen:'',command:'',sound:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'?',screen:'',command:'',sound:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'syntaxhelper',screen:'',command:'',sound:'',help:false,hacking:true,action:'syntaxhelper',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'ADMIN OVERRIDE',screen:'',command:'Access granted.',sound:'',help:false,hacking:true,action:'adminoverride',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'ADMIN ALLOWANCES',screen:'',command:'Allowances set to 99.',sound:'',help:false,hacking:true,action:'adminallowances',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}
+          {name:'back',screen:'',command:'',sound:'',help:false,hacking:false,action:'back',uid:createUid()},
+          {name:'help',screen:'',command:'',sound:'',help:true,hacking:false,action:'help',uid:createUid()},
+          {name:'?',screen:'',command:'',sound:'',help:true,hacking:false,action:'help',uid:createUid()},
+          {name:'syntaxhelper',screen:'',command:'',sound:'',help:false,hacking:true,action:'syntaxhelper',uid:createUid()},
+          {name:'ADMIN OVERRIDE',screen:'',command:'Access granted.',sound:'',help:false,hacking:true,action:'adminoverride',uid:createUid()},
+          {name:'ADMIN ALLOWANCES',screen:'',command:'Allowances set to 99.',sound:'',help:false,hacking:true,action:'adminallowances',uid:createUid()}
         ],
         difficulties: [],
         difficultyChoice: 'Average',
@@ -1079,9 +1090,9 @@ const app = Vue.createApp({
         this.screens.push({
           id,
           color,
-          items:[{text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
+          items:[{text:'', screen:'', command:'', sound:'', uid:createUid()}],
           open:true,
-          uid:crypto.randomUUID?crypto.randomUUID():Math.random(),
+          uid:createUid(),
           textColor:text,
           bgColor:bg,
           borderColor:border
@@ -1093,7 +1104,7 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
       },
       addCommand() {
-        this.commands.push({name:'',screen:'',command:'',sound:'',help:false,hacking:false,action:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        this.commands.push({name:'',screen:'',command:'',sound:'',help:false,hacking:false,action:'',uid:createUid()});
       },
       removeCommand(idx) {
         this.commands.splice(idx,1);
@@ -1109,7 +1120,7 @@ const app = Vue.createApp({
         [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       },
       addMenuItem(screen) {
-        screen.items.push({text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        screen.items.push({text:'', screen:'', command:'', sound:'', uid:createUid()});
         this.$nextTick(this.initSortables);
       },
         removeMenuItem(sIdx, iIdx) {
@@ -1155,7 +1166,7 @@ const app = Vue.createApp({
           target.showSoundEditor = !target.showSoundEditor;
         },
         addBootStep(seq) {
-        seq.push({text:'', type:'terminal', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        seq.push({text:'', type:'terminal', uid:createUid()});
         this.$nextTick(this.initSortables);
         },
         removeBootStep(seq, idx) {
@@ -1175,7 +1186,7 @@ const app = Vue.createApp({
         initSortables() {
         },
       addDifficulty(d={name:'', wordCount:[1,1], length:[1,1]}) {
-        this.difficulties.push({...d, open:false, uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        this.difficulties.push({...d, open:false, uid:createUid()});
         this.$nextTick(this.initSortables);
       },
       removeDifficulty(idx) {
@@ -1188,10 +1199,10 @@ const app = Vue.createApp({
           this.hideGenerationFeedback();
           document.getElementById('titles').value = (config.titleLines || []).join('\n');
           document.getElementById('headers').value = (config.headerLines || []).join('\n');
-          this.bootSequence = (config.bootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
-          this.lockedBootSequence = (config.lockedBootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
-          if(!this.bootSequence.length) this.bootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-          if(!this.lockedBootSequence.length) this.lockedBootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+          this.bootSequence = (config.bootSequence || []).map(s=>({...s, uid:createUid()}));
+          this.lockedBootSequence = (config.lockedBootSequence || []).map(s=>({...s, uid:createUid()}));
+          if(!this.bootSequence.length) this.bootSequence.push({text:'',type:'terminal',uid:createUid()});
+          if(!this.lockedBootSequence.length) this.lockedBootSequence.push({text:'',type:'terminal',uid:createUid()});
           this.screens = [];
           this.commands = [];
           const style = config.style || {};
@@ -1217,7 +1228,7 @@ const app = Vue.createApp({
           this.soundSettings = soundSettings;
           Object.entries(config.screens || {}).forEach(([id, data]) => {
             const color = generateScreenColor(BASE_SCREEN_COLOR, this.screens.length);
-            const screen = {id, color, items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
+            const screen = {id, color, items:[], open:true, uid:createUid(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
             const items = Array.isArray(data) ? data : (data.items || []);
             if(!Array.isArray(data) && data.style){
               if(data.style.textColor) screen.textColor = data.style.textColor;
@@ -1226,18 +1237,18 @@ const app = Vue.createApp({
             }
             items.forEach(item=>{
               if (typeof item === 'string') {
-                screen.items.push({text:item, screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+                screen.items.push({text:item, screen:'', command:'', sound:'', uid:createUid()});
               } else {
                 screen.items.push({
                   text: item.text || '',
                   screen: item.screen || '',
                   command: item.command || '',
                   sound: typeof item.sound === 'string' ? item.sound : '',
-                  uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+                  uid: createUid()
                 });
               }
             });
-            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', sound:'', uid:createUid()});
             this.screens.push(screen);
           });
           Object.entries(config.commands || {}).forEach(([name, info])=>{
@@ -1249,7 +1260,7 @@ const app = Vue.createApp({
               help: !!info.help,
               hacking: !!info.hacking,
               action: info.action || '',
-              uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+              uid: createUid()
             });
           });
           document.getElementById('locked').checked = config.locked || false;
