@@ -530,16 +530,35 @@ async function loadConfig(cycle=currentCycle){
   commands={};
   if(cfg.commands){
     for(const [name,info] of Object.entries(cfg.commands)){
+      if(!info || typeof info!=='object') continue;
       const key=name.toLowerCase();
-      commands[key]=info;
-      if(info.help){
+      const commandInfo={...info};
+      if(typeof commandInfo.sound==='string'){
+        commandInfo.sound=commandInfo.sound.trim();
+        if(!commandInfo.sound) delete commandInfo.sound;
+      }else{
+        delete commandInfo.sound;
+      }
+      commands[key]=commandInfo;
+      if(commandInfo.help){
         if(!screens.help) screens.help=[];
         const item={text:`> ${name}`};
-        if(info.screen) item.screen=info.screen;
-        if(info.command) item.command=info.command;
+        if(commandInfo.screen) item.screen=commandInfo.screen;
+        if(commandInfo.command) item.command=commandInfo.command;
+        if(commandInfo.sound) item.sound=commandInfo.sound;
         const helpItems=screens.help;
         const retIdx=helpItems.findIndex(it=>typeof it==='object' && it.screen==='menu');
         if(retIdx>=0) helpItems.splice(retIdx,0,item); else helpItems.push(item);
+      }
+    }
+  }
+  soundOverrides=Object.create(null);
+  if(cfg.sounds && typeof cfg.sounds==='object'){
+    for(const key of SOUND_OVERRIDE_KEYS){
+      const value=cfg.sounds[key];
+      if(typeof value==='string'){
+        const trimmed=value.trim();
+        if(trimmed) soundOverrides[key]=trimmed;
       }
     }
   }
@@ -553,10 +572,11 @@ async function loadConfig(cycle=currentCycle){
     compSpeed=compBaseSpeed;
     if(compSpeedSelect) compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
   }
-  if(savedCustomSoundDir===null && typeof cfg.customSoundDir==='string'){
+  if(typeof cfg.customSoundDir==='string'){
     await setCustomSoundDir(cfg.customSoundDir,{persist:false});
   }else{
-    await setCustomSoundDir(customSoundDir,{persist:false});
+    const preferred=savedCustomSoundDir!==null?savedCustomSoundDir:'';
+    await setCustomSoundDir(preferred,{persist:false});
   }
   if(cfg.style){
     const {textColor, backgroundColor, borderColor}=cfg.style;
@@ -622,8 +642,11 @@ const configButton=document.getElementById('config-button');
 const historyEl=content;
 
 function handleConfigLoaded(){
-  const startSound=trackAudio(new Audio('Terminal 4/Insert.wav'));
-  startSound.play();
+  const customAudio=playOverrideSound('powerInsert',{volume:selectVolume});
+  if(!customAudio){
+    const startSound=trackAudio(new Audio('Terminal 4/Insert.wav'));
+    startSound.play();
+  }
   if(powered){
     powerButton.click();
   }
@@ -643,7 +666,10 @@ configFile.addEventListener('change',async e=>{
   }
 });
 configButton.addEventListener('click',()=>{
-  trackAudio(new Audio('Terminal 4/Eject.wav')).play();
+  const customAudio=playOverrideSound('powerEject',{volume:selectVolume});
+  if(!customAudio){
+    trackAudio(new Audio('Terminal 4/Eject.wav')).play();
+  }
   configFile.click();
 });
 window.addEventListener('message', e => { uploadedConfig = e.data; handleConfigLoaded(); });
@@ -713,16 +739,26 @@ const userSpeedSelect=document.getElementById('user-speed-select');
 const compSpeedSelect=document.getElementById('comp-speed-select');
 const customSoundInput=document.getElementById('custom-sound-dir');
 const builderButton=document.getElementById('builder-button');
+const SOUND_OVERRIDE_KEYS=['menuHover','menuSelect','typingChar','enterKey','wordHover','charScroll','passwordSuccess','passwordFailure','prefOpen','prefClose','builderLaunch','powerInsert','powerEject','powerOn','powerOff'];
+let soundOverrides=Object.create(null);
 
 prefButton.addEventListener('click',()=>{
   const opening=prefMenu.style.display!=='flex';
   prefMenu.style.display=opening?'flex':'none';
+  const key=opening?'prefOpen':'prefClose';
+  const customAudio=playOverrideSound(key,{volume:selectVolume});
+  if(customAudio) return;
   const sound=trackAudio(new Audio(opening?'Pip/FavoriteOn.wav':'Pip/FavoriteOff.wav'));
   sound.play();
 });
 
 builderButton.addEventListener('click',e=>{
   e.preventDefault();
+  const customAudio=playOverrideSound('builderLaunch',{volume:selectVolume});
+  if(customAudio){
+    customAudio.addEventListener('ended',()=>{window.location.href=builderButton.href;},{once:true});
+    return;
+  }
   const audio=trackAudio(new Audio('Pip/holotapestart3.wav'));
   audio.play();
   audio.addEventListener('ended',()=>{window.location.href=builderButton.href;});
@@ -774,6 +810,7 @@ const enterCharAudios=[
   'Terminal 3/enter/charenter_03.wav'
 ].map(preloadAudio);
 const customAudioCache=new Map();
+const configuredSoundErrorHandlers=new WeakSet();
 let customEnterAudios=[];
 let customSoundLoadToken=0;
 userSpeedSelect.value=String([58,75,91,100].includes(userBaseSpeed)?userBaseSpeed:75);
@@ -1417,11 +1454,13 @@ async function handleCommand(cmd){
   const custom=commands[command];
   if(hackingActive){
     if(custom && custom.hacking){
+      playConfiguredSound(custom.sound);
       await executeCommand(custom, raw);
     }else{
       processGuess(raw.toUpperCase().slice(0,20),false);
     }
   }else if(custom){
+    playConfiguredSound(custom.sound);
     await executeCommand(custom, raw);
   }else{
     const match=currentOptions.find(o=>{
@@ -1463,15 +1502,22 @@ async function loadScrollSound(){
 }
 
 function playScrollSound(){
-  if(!scrollBuffer || !powered) return;
+  if(!powered) return;
   lastScrollTime=Date.now();
-  const src=audioCtx.createBufferSource();
-  src.buffer=scrollBuffer;
-  const gain=audioCtx.createGain();
-  gain.gain.value=scrollVolume;
-  src.connect(gain).connect(audioCtx.destination);
-  src.start();
-  scrollTimeout=setTrackedTimeout(playScrollSound,scrollIntervalMs);
+  const customAudio=playOverrideSound('charScroll',{volume:scrollVolume});
+  let played=!!customAudio;
+  if(scrollBuffer && !customAudio){
+    const src=audioCtx.createBufferSource();
+    src.buffer=scrollBuffer;
+    const gain=audioCtx.createGain();
+    gain.gain.value=scrollVolume;
+    src.connect(gain).connect(audioCtx.destination);
+    src.start();
+    played=true;
+  }
+  if(played){
+    scrollTimeout=setTrackedTimeout(playScrollSound,scrollIntervalMs);
+  }
 }
 function startScrollSound(){
   if(scrollTimeout || !powered) return;
@@ -1521,11 +1567,15 @@ function stopFanHum(){
 
 function playFocusSound(){
   if(!powered) return;
+  const customAudio=playOverrideSound('menuHover',{volume:focusVolume});
+  if(customAudio) return;
   playCachedAudio(focusAudio,focusVolume);
 }
 
 function playSelectSound(){
   if(!powered) return;
+  const customAudio=playOverrideSound('menuSelect',{volume:selectVolume});
+  if(customAudio) return;
   const files=[
     'Terminal 4/HDD/HDD1/HDD101.wav',
     'Terminal 4/HDD/HDD1/HDD102.wav',
@@ -1560,12 +1610,16 @@ function playSelectSound(){
 
 function playCharFocusSound(){
   if(!powered) return;
+  const customAudio=playOverrideSound('typingChar',{volume:focusVolume});
+  if(customAudio) return;
   const audio=charFocusAudios[Math.floor(Math.random()*charFocusAudios.length)];
   playCachedAudio(audio,focusVolume);
 }
 
 function playWordFocusSound(){
   if(!powered) return;
+  const customAudio=playOverrideSound('wordHover',{volume:focusVolume});
+  if(customAudio) return;
   const audio=wordFocusAudios[Math.floor(Math.random()*wordFocusAudios.length)];
   playCachedAudio(audio,focusVolume);
 }
@@ -1630,6 +1684,53 @@ function getCachedCustomAudio(src){
   const audio=preloadAudio(src);
   customAudioCache.set(src,audio);
   return audio;
+}
+
+function resolveSoundPath(soundPath){
+  const trimmed=(soundPath||'').trim();
+  if(!trimmed) return '';
+  if(/^[a-z]+:/i.test(trimmed) || trimmed.startsWith('//') || trimmed.startsWith('/')){
+    return trimmed;
+  }
+  if(!customSoundDir){
+    return trimmed;
+  }
+  const base=customSoundDir.endsWith('/')?customSoundDir:`${customSoundDir}/`;
+  try{
+    const baseUrl=new URL(base,window.location.href);
+    return new URL(trimmed,baseUrl).href;
+  }catch(err){
+    console.warn('Failed to resolve sound path',{sound:trimmed,customSoundDir},err);
+    return `${base}${trimmed.replace(/^\.\//,'')}`;
+  }
+}
+
+function playConfiguredSound(soundPath,{volume=selectVolume}={}){
+  const resolved=resolveSoundPath(soundPath);
+  if(!resolved) return null;
+  try{
+    const audio=getCachedCustomAudio(resolved);
+    if(!configuredSoundErrorHandlers.has(audio)){
+      audio.addEventListener('error',()=>{
+        if(customAudioCache.get(resolved)===audio){
+          customAudioCache.delete(resolved);
+        }
+        console.warn('Configured sound playback failed',resolved);
+      });
+      configuredSoundErrorHandlers.add(audio);
+    }
+    playCachedAudio(audio,volume);
+    return audio;
+  }catch(err){
+    console.warn('Failed to play configured sound',resolved,err);
+    return null;
+  }
+}
+
+function playOverrideSound(key,{volume=selectVolume}={}){
+  const sound=soundOverrides[key];
+  if(!sound) return null;
+  return playConfiguredSound(sound,{volume});
 }
 
 async function discoverCustomSoundSources(dir){
@@ -1740,6 +1841,8 @@ function normalizeAudioSources(entries,baseUrl){
 
 function playEnterCharSound(){
   if(!powered) return;
+  const customAudio=playOverrideSound('enterKey',{volume:selectVolume});
+  if(customAudio) return;
   const audio=enterCharAudios[Math.floor(Math.random()*enterCharAudios.length)];
   playCachedAudio(audio,selectVolume);
   if(customEnterAudios.length){
@@ -1756,6 +1859,9 @@ function playEnterCharSound(){
 
 function playPasswordResult(correct){
   if(!powered) return;
+  const key=correct?'passwordSuccess':'passwordFailure';
+  const customAudio=playOverrideSound(key,{volume:selectVolume});
+  if(customAudio) return;
   const file=correct?'Terminal 3/passgood.wav':'Terminal 3/passbad.wav';
   const audio=trackAudio(new Audio(file));
   audio.volume=selectVolume;
@@ -1997,6 +2103,7 @@ async function showScreen(name){
         div.tabIndex=0;
         await typeText(div,line.text);
         div.addEventListener('click',async()=>{
+          playConfiguredSound(line.sound);
           playSelectSound();
           if(line.screen){
             await showScreen(line.screen);
@@ -2083,8 +2190,11 @@ powerButton.addEventListener('click',async()=>{
   if(!powered){
     currentCycle++;
     const cycle=currentCycle;
-    const powerSound=trackAudio(new Audio('Terminal 3/poweron.mp3'));
-    powerSound.play();
+    const customAudio=playOverrideSound('powerOn',{volume:selectVolume});
+    if(!customAudio){
+      const powerSound=trackAudio(new Audio('Terminal 3/poweron.mp3'));
+      powerSound.play();
+    }
     powerScreen.style.display='none';
     updateScale();
     prevWidth=window.innerWidth;
@@ -2127,8 +2237,11 @@ powerButton.addEventListener('click',async()=>{
     header.innerHTML='';
     content.innerHTML='';
     applyScreenStyle(null);
-    const powerSound=trackAudio(new Audio('Terminal 3/poweroff.mp3'));
-    powerSound.play();
+    const customAudio=playOverrideSound('powerOff',{volume:selectVolume});
+    if(!customAudio){
+      const powerSound=trackAudio(new Audio('Terminal 3/poweroff.mp3'));
+      powerSound.play();
+    }
     powerScreen.style.display='flex';
     updateScale();
     prevWidth=window.innerWidth;

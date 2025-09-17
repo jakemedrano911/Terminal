@@ -78,6 +78,39 @@
     .menu-item {
       color: inherit;
     }
+    .sound-toggle-btn {
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sound-popover {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 0.25rem;
+      padding: 0.5rem;
+      border: 2px solid #d1d5db;
+      border-radius: 0.5rem;
+      background-color: #ffffff;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      min-width: 12rem;
+      z-index: 20;
+    }
+    .dark .sound-popover {
+      background-color: var(--terminal-bg);
+      border-color: var(--border-color);
+      box-shadow: 0 4px 12px rgba(0,255,0,0.15);
+    }
+    .sound-popover label {
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .sound-popover input {
+      width: 100%;
+    }
     .dark .screen,
     .dark .menu-item {
       color: var(--screen-text-color, var(--text-color));
@@ -302,6 +335,7 @@
       <button type="button" @click="activeTab='boot'" :class="['tab-btn', activeTab==='boot' ? 'tab-btn-active' : '']">Boot</button>
       <button type="button" @click="activeTab='commands'" :class="['tab-btn', activeTab==='commands' ? 'tab-btn-active' : '']">Commands</button>
       <button type="button" @click="activeTab='hacking'" :class="['tab-btn', activeTab==='hacking' ? 'tab-btn-active' : '']">Hacking</button>
+      <button type="button" @click="activeTab='sounds'" :class="['tab-btn', activeTab==='sounds' ? 'tab-btn-active' : '']">Sounds</button>
       <button type="button" @click="activeTab='prefs'" :class="['tab-btn', activeTab==='prefs' ? 'tab-btn-active' : '']">Preferences</button>
     </div>
   <div v-show="activeTab==='content'" class="space-y-4 tab-content">
@@ -351,7 +385,7 @@
               <template v-for="(item, iIdx) in screen.items">
                 <div
                   :key="item.uid"
-                  class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded"
+                  class="menu-item relative mb-1 flex flex-wrap items-center gap-1 border p-1 rounded"
                   :style="{ backgroundColor: screen.color, borderColor: screen.color, '--screen-text-color': screen.textColor || textColor }"
                 >
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
@@ -363,6 +397,27 @@
                     :title="menuItemScreenTitle(item)"
                   >
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
+                  <button
+                    type="button"
+                    class="action-btn sound-toggle-btn"
+                    title="Configure sound effect"
+                    @click.stop="toggleSoundEditor(item)"
+                    :aria-expanded="item.showSoundEditor ? 'true' : 'false'"
+                  >
+                    🔊
+                  </button>
+                  <div v-if="item.showSoundEditor" class="sound-popover" @click.stop>
+                    <label class="block mb-1">Sound Path</label>
+                    <input
+                      v-model="item.sound"
+                      class="border rounded p-1"
+                      placeholder="Optional sound"
+                      aria-label="Sound path"
+                      title="Optional sound file path. Relative paths use the Custom Sound Directory when provided."
+                      @keydown.esc.stop.prevent="item.showSoundEditor = false"
+                    >
+                    <button type="button" class="mt-2 action-btn w-full" @click="item.showSoundEditor = false">Close</button>
+                  </div>
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
                     <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
@@ -409,7 +464,7 @@
   <div v-show="activeTab==='commands'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow">
       <legend class="flex items-center gap-1">Commands</legend>
-      <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
+      <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="relative flex items-center flex-wrap gap-2 mb-2">
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
         <input
           v-model="cmd.screen"
@@ -419,6 +474,27 @@
           :title="commandScreenTitle(cmd)"
         >
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
+        <button
+          type="button"
+          class="action-btn sound-toggle-btn"
+          title="Configure sound effect"
+          @click.stop="toggleSoundEditor(cmd)"
+          :aria-expanded="cmd.showSoundEditor ? 'true' : 'false'"
+        >
+          🔊
+        </button>
+        <div v-if="cmd.showSoundEditor" class="sound-popover" @click.stop>
+          <label class="block mb-1">Sound Path</label>
+          <input
+            v-model="cmd.sound"
+            class="border rounded p-1"
+            placeholder="Optional sound"
+            aria-label="Sound path"
+            title="Optional sound file path. Relative paths use the Custom Sound Directory when provided."
+            @keydown.esc.stop.prevent="cmd.showSoundEditor = false"
+          >
+          <button type="button" class="mt-2 action-btn w-full" @click="cmd.showSoundEditor = false">Close</button>
+        </div>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
         <div class="flex gap-1">
@@ -477,6 +553,33 @@
         </fieldset>
     </fieldset>
   </div>
+  <div v-show="activeTab==='sounds'" class="space-y-4 tab-content">
+    <fieldset class="p-4 border rounded-lg shadow" title="Configure how the terminal locates custom audio files.">
+      <legend class="flex items-center gap-1">Sound Directory</legend>
+      <label class="block" title="Directory scanned for additional audio clips. Relative sound paths are resolved against this directory.">
+        Custom Sound Directory:
+        <input type="text" class="ml-2 border rounded p-1 w-full max-w-xs" v-model="customSoundDir" placeholder="e.g. sounds/custom">
+      </label>
+    </fieldset>
+    <fieldset class="p-4 border rounded-lg shadow" title="Provide custom sound effects for terminal interactions.">
+      <legend class="flex items-center gap-1">Sound Overrides</legend>
+      <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Leave a field blank to use the built-in audio. Relative paths use the Custom Sound Directory when provided.</p>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div v-for="field in soundFieldDefs" :key="field.key">
+          <label class="block text-sm font-semibold" :title="field.description">
+            {{ field.label }}
+            <input
+              type="text"
+              class="mt-1 border rounded p-1 w-full"
+              v-model="soundSettings[field.key]"
+              :placeholder="field.placeholder || 'Optional sound path'"
+            >
+          </label>
+          <p v-if="field.description" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ field.description }}</p>
+        </div>
+      </div>
+    </fieldset>
+  </div>
   <div v-show="activeTab==='prefs'" class="space-y-4 tab-content">
     <fieldset class="p-4 border rounded-lg shadow" title="Customize terminal appearance.">
       <legend class="flex items-center gap-1">Default Appearance</legend>
@@ -491,12 +594,6 @@
       <label class="block" title="Background color of the terminal window, e.g., #041204.">Default Background Color:
         <input type="color" id="bg-color" class="ml-2" v-model="bgColor">
         <input type="text" id="bg-color-hex" class="ml-2 border rounded p-1 w-24" v-model="bgColor">
-      </label>
-    </fieldset>
-    <fieldset class="p-4 border rounded-lg shadow" title="Configure audio options.">
-      <legend class="flex items-center gap-1">Audio</legend>
-      <label class="block" title="Directory scanned for additional enter key audio clips.">Custom Sound Directory:
-        <input type="text" class="ml-2 border rounded p-1 w-full max-w-xs" v-model="customSoundDir" placeholder="e.g. sounds/custom">
       </label>
     </fieldset>
   </div>
@@ -516,6 +613,30 @@ const DEFAULT_BORDER_COLOR = '#008800';
 const BASE_SCREEN_COLOR = '#0c2c5f';
 const DEFAULT_DOWNLOAD_BASENAME = 'config';
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/g;
+const SOUND_FIELD_DEFINITIONS = [
+  { key: 'menuHover', label: 'Menu Hover', description: 'Played when menu options are highlighted.' },
+  { key: 'menuSelect', label: 'Menu Select', description: 'Played when a menu option is chosen.' },
+  { key: 'typingChar', label: 'Typing Character', description: 'Played while the terminal types characters.' },
+  { key: 'enterKey', label: 'Enter Key', description: 'Played when input is confirmed.' },
+  { key: 'wordHover', label: 'Hacking Word Hover', description: 'Played when hovering hacking words.' },
+  { key: 'charScroll', label: 'Character Scroll Loop', description: 'Looped while text scrolls across the screen.' },
+  { key: 'passwordSuccess', label: 'Password Success', description: 'Played when the password guess is correct.' },
+  { key: 'passwordFailure', label: 'Password Failure', description: 'Played when the password guess is incorrect.' },
+  { key: 'prefOpen', label: 'Preferences Open', description: 'Played when opening the preferences menu.' },
+  { key: 'prefClose', label: 'Preferences Close', description: 'Played when closing the preferences menu.' },
+  { key: 'builderLaunch', label: 'Open Builder', description: 'Played when opening the configuration builder.' },
+  { key: 'powerInsert', label: 'Load Config (Insert)', description: 'Played when selecting a configuration file.' },
+  { key: 'powerEject', label: 'Config Menu (Eject)', description: 'Played when opening the configuration picker.' },
+  { key: 'powerOn', label: 'Power On', description: 'Played when the terminal powers on.' },
+  { key: 'powerOff', label: 'Power Off', description: 'Played when the terminal powers down.' }
+];
+const SOUND_FIELD_KEYS = SOUND_FIELD_DEFINITIONS.map(def => def.key);
+
+function createEmptySoundSettings(){
+  const settings={};
+  SOUND_FIELD_KEYS.forEach(key=>{settings[key]='';});
+  return settings;
+}
 
 function sanitizeDownloadBaseName(name){
   const trimmed=(name||'').trim();
@@ -638,12 +759,12 @@ const app = Vue.createApp({
         bootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
         lockedBootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
         commands: [
-          {name:'back',screen:'',command:'',help:false,hacking:false,action:'back',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'help',screen:'',command:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'?',screen:'',command:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'syntaxhelper',screen:'',command:'',help:false,hacking:true,action:'syntaxhelper',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'ADMIN OVERRIDE',screen:'',command:'Access granted.',help:false,hacking:true,action:'adminoverride',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
-          {name:'ADMIN ALLOWANCES',screen:'',command:'Allowances set to 99.',help:false,hacking:true,action:'adminallowances',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}
+          {name:'back',screen:'',command:'',sound:'',help:false,hacking:false,action:'back',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'help',screen:'',command:'',sound:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'?',screen:'',command:'',sound:'',help:true,hacking:false,action:'help',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'syntaxhelper',screen:'',command:'',sound:'',help:false,hacking:true,action:'syntaxhelper',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'ADMIN OVERRIDE',screen:'',command:'Access granted.',sound:'',help:false,hacking:true,action:'adminoverride',uid:crypto.randomUUID?crypto.randomUUID():Math.random()},
+          {name:'ADMIN ALLOWANCES',screen:'',command:'Allowances set to 99.',sound:'',help:false,hacking:true,action:'adminallowances',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}
         ],
         difficulties: [],
         difficultyChoice: 'Average',
@@ -656,6 +777,8 @@ const app = Vue.createApp({
         hackBorderColor: DEFAULT_BORDER_COLOR,
         hackingHeader: '',
         customSoundDir: '',
+        soundFieldDefs: SOUND_FIELD_DEFINITIONS,
+        soundSettings: createEmptySoundSettings(),
         hasUnsavedChanges: false,
         suppressUnsavedTracking: 0,
         domUnsavedListeners: [],
@@ -665,7 +788,8 @@ const app = Vue.createApp({
           commands: '',
           bootSequence: '',
           lockedBootSequence: '',
-          difficulties: ''
+          difficulties: '',
+          sounds: ''
         }
       };
   },
@@ -802,6 +926,17 @@ const app = Vue.createApp({
       },
       flush: 'sync'
     },
+    soundSettings: {
+      handler() {
+        const snapshot = this.serializeSounds();
+        const changed = snapshot !== this.collectionSnapshots.sounds;
+        this.collectionSnapshots.sounds = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
     customSoundDir: {
       handler() {
         this.markUnsaved();
@@ -866,22 +1001,47 @@ const app = Vue.createApp({
           textColor: scr.textColor,
           bgColor: scr.bgColor,
           borderColor: scr.borderColor,
-          items: scr.items.map(it=>({
-            text: it.text,
-            screen: it.screen,
-            command: it.command
-          }))
+          items: scr.items.map(it=>{
+            const sound=(it.sound||'').trim();
+            const base={
+              text: it.text,
+              screen: it.screen,
+              command: it.command
+            };
+            if(sound) base.sound=sound;
+            return base;
+          })
         })));
       },
       serializeCommands(){
-        return JSON.stringify(this.commands.map(cmd=>({
-          name: cmd.name,
-          screen: cmd.screen,
-          command: cmd.command,
-          help: !!cmd.help,
-          hacking: !!cmd.hacking,
-          action: cmd.action
+        return JSON.stringify(this.commands.map(cmd=>{
+          const sound=(cmd.sound||'').trim();
+          const base={
+            name: cmd.name,
+            screen: cmd.screen,
+            command: cmd.command,
+            help: !!cmd.help,
+            hacking: !!cmd.hacking,
+            action: cmd.action
+          };
+          if(sound) base.sound=sound;
+          return base;
         })));
+      },
+      serializeSounds(){
+        const snapshot=SOUND_FIELD_KEYS.map(key=>{
+          const value=(this.soundSettings[key]||'').trim();
+          return value?{key,value}:null;
+        }).filter(Boolean);
+        return JSON.stringify(snapshot);
+      },
+      collectSoundOverrides(){
+        const overrides={};
+        SOUND_FIELD_KEYS.forEach(key=>{
+          const value=(this.soundSettings[key]||'').trim();
+          if(value) overrides[key]=value;
+        });
+        return overrides;
       },
       serializeDifficulties(){
         return JSON.stringify(this.difficulties.map(diff=>({
@@ -896,6 +1056,7 @@ const app = Vue.createApp({
         this.collectionSnapshots.bootSequence = this.serializeBootSequence(this.bootSequence);
         this.collectionSnapshots.lockedBootSequence = this.serializeBootSequence(this.lockedBootSequence);
         this.collectionSnapshots.difficulties = this.serializeDifficulties();
+        this.collectionSnapshots.sounds = this.serializeSounds();
       },
       updateDownloadNameFromFile(fileName=''){
         this.runWithoutUnsavedTracking(()=>{
@@ -918,7 +1079,7 @@ const app = Vue.createApp({
         this.screens.push({
           id,
           color,
-          items:[{text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
+          items:[{text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
           open:true,
           uid:crypto.randomUUID?crypto.randomUUID():Math.random(),
           textColor:text,
@@ -932,7 +1093,7 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
       },
       addCommand() {
-        this.commands.push({name:'',screen:'',command:'',help:false,hacking:false,action:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        this.commands.push({name:'',screen:'',command:'',sound:'',help:false,hacking:false,action:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
       },
       removeCommand(idx) {
         this.commands.splice(idx,1);
@@ -948,7 +1109,7 @@ const app = Vue.createApp({
         [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       },
       addMenuItem(screen) {
-        screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        screen.items.push({text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
         this.$nextTick(this.initSortables);
       },
         removeMenuItem(sIdx, iIdx) {
@@ -988,6 +1149,10 @@ const app = Vue.createApp({
           if (!this.invalidCommandScreenIds.has(cmd.uid)) return 'Screen ID';
           const screen = (cmd.screen || '').trim();
           return screen ? `Unknown screen "${screen}"` : 'Screen ID';
+        },
+        toggleSoundEditor(target){
+          if(!target) return;
+          target.showSoundEditor = !target.showSoundEditor;
         },
         addBootStep(seq) {
         seq.push({text:'', type:'terminal', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
@@ -1042,6 +1207,14 @@ const app = Vue.createApp({
           this.hackBorderColor = hackingStyle.borderColor || globalBorder;
           this.hackingHeader = (config.hacking && config.hacking.header) || '';
           this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
+          const soundSettings = createEmptySoundSettings();
+          if(config.sounds && typeof config.sounds === 'object'){
+            SOUND_FIELD_KEYS.forEach(key=>{
+              const value=config.sounds[key];
+              soundSettings[key]=typeof value==='string'?value.trim():'';
+            });
+          }
+          this.soundSettings = soundSettings;
           Object.entries(config.screens || {}).forEach(([id, data]) => {
             const color = generateScreenColor(BASE_SCREEN_COLOR, this.screens.length);
             const screen = {id, color, items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
@@ -1053,17 +1226,18 @@ const app = Vue.createApp({
             }
             items.forEach(item=>{
               if (typeof item === 'string') {
-                screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+                screen.items.push({text:item, screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
               } else {
                 screen.items.push({
                   text: item.text || '',
                   screen: item.screen || '',
                   command: item.command || '',
+                  sound: typeof item.sound === 'string' ? item.sound : '',
                   uid: crypto.randomUUID?crypto.randomUUID():Math.random()
                 });
               }
             });
-            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
             this.screens.push(screen);
           });
           Object.entries(config.commands || {}).forEach(([name, info])=>{
@@ -1071,6 +1245,7 @@ const app = Vue.createApp({
               name,
               screen: info.screen || '',
               command: info.command || '',
+              sound: typeof info.sound === 'string' ? info.sound : '',
               help: !!info.help,
               hacking: !!info.hacking,
               action: info.action || '',
@@ -1212,10 +1387,13 @@ const app = Vue.createApp({
           const text=(it.text||'').trimEnd();
           const screen=(it.screen||'').trim();
           const command=(it.command||'').trim();
+          const sound=(it.sound||'').trim();
           if(!text && !screen && !command) return;
-          if(screen && command){ items.push({text,screen,command}); }
-          else if(screen){ items.push({text,screen}); }
-          else if(command){ items.push({text,command}); }
+          const baseSound=sound?{sound}:null;
+          if(screen && command){ items.push(baseSound?{...baseSound,text,screen,command}:{text,screen,command}); }
+          else if(screen){ items.push(baseSound?{...baseSound,text,screen}:{text,screen}); }
+          else if(command){ items.push(baseSound?{...baseSound,text,command}:{text,command}); }
+          else if(baseSound){ items.push({ ...baseSound, text }); }
           else { items.push(text); }
         });
         const style = {};
@@ -1235,6 +1413,8 @@ const app = Vue.createApp({
         if(screen) obj.screen=screen;
         if(message) obj.command=message;
         if(action) obj.action=action;
+        const sound=(c.sound||'').trim();
+        if(sound) obj.sound=sound;
         if(c.help) obj.help=true;
         if(c.hacking) obj.hacking=true;
         if(Object.keys(obj).length) commandsObj[name]=obj;
@@ -1260,6 +1440,7 @@ const app = Vue.createApp({
       if (dudWords.length) hacking.dudWords = dudWords;
       if (this.hackingHeader) hacking.header = this.hackingHeader;
       const customSoundDir = (this.customSoundDir || '').trim();
+      const soundOverrides = this.collectSoundOverrides();
       this.runWithoutUnsavedTracking(()=>{
         this.downloadName = sanitizeDownloadBaseName(this.downloadName);
       });
@@ -1276,6 +1457,7 @@ const app = Vue.createApp({
         hacking
       };
       if(Object.keys(commandsObj).length) config.commands = commandsObj;
+      if(Object.keys(soundOverrides).length) config.sounds = soundOverrides;
       const blob = new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'});
       const url = URL.createObjectURL(blob);
       const fileName = this.downloadFileName;
