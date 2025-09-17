@@ -588,7 +588,35 @@ const header=document.getElementById('header');
 const content=document.getElementById('content');
 const input=document.getElementById('input');
 const isTouch=('ontouchstart' in window || navigator.maxTouchPoints>0 || window.matchMedia('(pointer: coarse)').matches);
-function focusInput(){if(!isTouch) input.focus();}
+let touchInputEnabled=!isTouch;
+function setTouchInputEnabled(enabled){
+  enabled=!!enabled;
+  touchInputEnabled=enabled;
+  input.setAttribute('contenteditable',enabled?'true':'false');
+  if(enabled){
+    if(isTouch){
+      requestAnimationFrame(()=>{
+        if(!touchInputEnabled) return;
+        input.focus();
+        placeCaretAtEnd(input);
+      });
+    }else{
+      input.focus();
+      placeCaretAtEnd(input);
+    }
+  }else{
+    const sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    input.blur();
+  }
+}
+function focusInput(){
+  if(isTouch){
+    if(touchInputEnabled) input.focus();
+  }else{
+    input.focus();
+  }
+}
 const configFile=document.getElementById('config-file');
 const configButton=document.getElementById('config-button');
 const historyEl=content;
@@ -765,6 +793,16 @@ compSpeedSelect.addEventListener('change',()=>{
   savedCompSpeed=compBaseSpeed;
 });
 
+if(isTouch){
+  const enableTouchEditing=()=>{if(!touchInputEnabled) setTouchInputEnabled(true);};
+  input.addEventListener('touchend',enableTouchEditing,{passive:true});
+  input.addEventListener('click',enableTouchEditing);
+  input.addEventListener('blur',()=>{if(touchInputEnabled) setTouchInputEnabled(false);});
+  setTouchInputEnabled(false);
+}else{
+  setTouchInputEnabled(true);
+}
+
 input.addEventListener('input',updateInput);
 input.addEventListener('keydown',async e=>{
   if(e.key==='Enter'){
@@ -781,12 +819,14 @@ function updateInput(){
   }
   input.textContent=text;
   inputText=text;
+  if(isTouch && !touchInputEnabled) return;
   placeCaretAtEnd(input);
 }
 updateInput();
 loadConfig();
 
 function placeCaretAtEnd(el){
+  if(isTouch && !touchInputEnabled) return;
   const range=document.createRange();
   range.selectNodeContents(el);
   range.collapse(false);
@@ -1179,7 +1219,11 @@ function insertHackBox(box){
   input.textContent='';
   inputText='';
   updateInput();
-  focusInput();
+  if(isTouch){
+    setTouchInputEnabled(false);
+  }else{
+    focusInput();
+  }
   }
 
 function commandAdminAllowances(rawCmd, msg='Allowances set to 99.'){
@@ -1361,6 +1405,11 @@ async function handleCommand(cmd){
     input.textContent='';
     inputText='';
     updateInput();
+    if(isTouch){
+      setTouchInputEnabled(false);
+    }else{
+      focusInput();
+    }
     return;
   }
   const raw=cmd.trim();
@@ -1390,7 +1439,11 @@ async function handleCommand(cmd){
   input.textContent='';
   inputText='';
   updateInput();
-  focusInput();
+  if(isTouch){
+    setTouchInputEnabled(false);
+  }else{
+    focusInput();
+  }
 }
 
 const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
@@ -2047,6 +2100,9 @@ powerButton.addEventListener('click',async()=>{
       inputText='';
       input.textContent='';
       updateInput();
+      if(isTouch){
+        setTouchInputEnabled(false);
+      }
       hackingActive=false;
       hackingData=null;
       await loadConfig(cycle);
@@ -2065,6 +2121,9 @@ powerButton.addEventListener('click',async()=>{
     selected=-1;
     inputText='';
     input.textContent='';
+    if(isTouch){
+      setTouchInputEnabled(false);
+    }
     header.innerHTML='';
     content.innerHTML='';
     applyScreenStyle(null);

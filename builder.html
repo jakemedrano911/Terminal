@@ -1130,7 +1130,11 @@ const app = Vue.createApp({
       confirmNavigation(message){
         if(!this.hasUnsavedChanges) return true;
         const prompt = message || 'You have unsaved changes. Continue without exporting your configuration?';
-        return window.confirm(prompt);
+        const confirmed = window.confirm(prompt);
+        if(confirmed){
+          this.hasUnsavedChanges = false;
+        }
+        return confirmed;
       },
       handleBackToTerminal(event){
         if(event && (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1)){
