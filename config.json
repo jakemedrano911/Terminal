@@ -152,6 +152,7 @@
     "diagnostics": { "command": "Running system diagnostics...", "help": true },
     "exit": { "screen": "menu", "help": true, "hacking": true }
   },
+  "customSoundDir": "",
   "style": {
       "textColor": "#7aff7a",
       "backgroundColor": "#041204",

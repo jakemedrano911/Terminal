@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <title>Terminal Config Builder</title>
   <script>
-    tailwind.config = { darkMode: 'class' }
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: 'class' };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="builder-utils.js"></script>
   <style>
     @font-face{
       font-family:"FSEX300";
@@ -70,6 +72,16 @@
       transition: transform 0.2s;
       touch-action: none;
     }
+    .screen {
+      color: #000000;
+    }
+    .menu-item {
+      color: inherit;
+    }
+    .dark .screen,
+    .dark .menu-item {
+      color: var(--screen-text-color, var(--text-color));
+    }
     .drag-chosen {
       transform: scale(1.05);
       box-shadow: 0 4px 8px rgba(0,0,0,0.2);
@@ -83,6 +95,14 @@
     }
     .dragging {
       user-select: none;
+    }
+    .invalid-field {
+      border-color:#dc2626 !important;
+      box-shadow:0 0 0 1px rgba(220,38,38,0.6);
+    }
+    .dark .invalid-field {
+      border-color:#f87171 !important;
+      box-shadow:0 0 0 1px rgba(248,113,113,0.7);
     }
       .action-btn {
         border:2px solid #9ca3af;
@@ -176,6 +196,41 @@
     .dark #tabs-bar { border-bottom:2px solid var(--border-color); }
     .dark a { color: var(--text-color); }
     .dark #generate-feedback { color: var(--text-color); }
+    #download-panel .download-box {
+      border:2px solid #4b5563;
+      background-color:#f3f4f6;
+      border-radius:0.5rem;
+      padding:1rem;
+      box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    }
+    .dark #download-panel .download-box {
+      border:2px solid var(--border-color);
+      background-color:rgba(4,18,4,0.85);
+      box-shadow:0 0 12px rgba(0,255,0,0.25);
+    }
+    .download-box .download-btn {
+      white-space:normal;
+      text-align:center;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:0.5rem 1.25rem;
+      font-weight:600;
+      max-width:100%;
+      min-width:0;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+    @media (min-width: 640px) {
+      #download-panel .download-box > .flex {
+        flex-wrap: wrap;
+      }
+      #download-panel .download-box #generate-feedback {
+        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 100%;
+      }
+    }
 
     /* Boot sequence reveal */
     #builder-wrapper.boot-load {
@@ -209,16 +264,39 @@
 <body class="m-0 p-4">
 <div id="builder-wrapper" class="max-w-4xl mx-auto">
 <h1 class="text-2xl font-bold mb-4">Config Builder</h1>
-<div class="mb-4 flex gap-2 items-center w-full">
-  <button type="button" id="load-config" class="top-line-btn" title="Load configuration from a JSON file such as one previously exported.">Load Config</button>
-  <button type="submit" form="builder-form" class="top-line-btn" title="Generate the configuration file and enable downloading config.json">Generate Config</button>
-  <a id="download-link" class="hidden text-blue-600 underline" download="config.json">Download config.json</a>
-  <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
-  <a id="back-to-terminal" href="index.html" class="top-line-btn ml-auto">Back to Terminal</a>
-</div>
-<div id="generate-feedback" class="text-green-600 hidden mt-2"></div>
-<input type="file" id="config-file" accept="application/json" class="hidden">
 <form id="builder-form">
+  <div class="mb-4 flex gap-2 items-center w-full flex-wrap">
+    <button type="button" id="load-config" class="top-line-btn" title="Load configuration from a JSON file such as one previously exported.">Load Config</button>
+    <label for="download-name" class="flex items-center gap-2" title="Name used for the generated JSON file. The .json extension is added automatically.">
+      File Name:
+      <input id="download-name" v-model="downloadName" class="border rounded p-1 w-40" placeholder="config">
+    </label>
+    <button type="submit" class="top-line-btn" title="Generate the configuration file and enable downloading the JSON.">Generate Config</button>
+    <button type="button" id="dark-toggle" class="top-line-btn" title="Toggle dark mode">Toggle Dark Mode</button>
+    <a id="back-to-terminal" href="index.html" class="top-line-btn ml-auto" @click="handleBackToTerminal">Back to Terminal</a>
+  </div>
+  <div id="download-panel" class="hidden mt-4">
+    <div class="download-box">
+      <div class="flex flex-col gap-2">
+        <a
+          id="download-link"
+          :class="['top-line-btn download-btn w-full sm:w-auto', downloadUrl ? '' : 'hidden']"
+          :download="downloadFileName"
+          :href="downloadUrl"
+          @click="handleDownloadClick"
+        >
+          Download {{ downloadFileName }}
+        </a>
+        <div
+          id="generate-feedback"
+          class="text-green-600 hidden text-sm sm:text-base text-left self-start max-w-full inline-flex flex-wrap"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="config-file" accept="application/json" class="hidden">
     <div id="tabs-bar" class="mb-4 flex gap-2 border-b border-gray-300 dark:border-gray-700">
       <button type="button" @click="activeTab='content'" :class="['tab-btn', activeTab==='content' ? 'tab-btn-active' : '']">Terminal Content</button>
       <button type="button" @click="activeTab='boot'" :class="['tab-btn', activeTab==='boot' ? 'tab-btn-active' : '']">Boot</button>
@@ -239,7 +317,11 @@
       <legend class="flex items-center gap-1">Screens</legend>
       <div id="screens-container">
         <template v-for="(screen, sIdx) in screens">
-            <div :key="screen.uid" class="screen mb-4 border border-l-4 rounded p-2" :style="{borderColor: screen.color, backgroundColor: screen.color, color: screen.textColor}">
+            <div
+              :key="screen.uid"
+              class="screen mb-4 border border-l-4 rounded p-2"
+              :style="{ borderColor: screen.color, backgroundColor: screen.color, '--screen-text-color': screen.textColor || textColor }"
+            >
             <div class="mb-2">
               <div class="flex flex-wrap items-center mb-2">
                 <button type="button" @click="screen.open = !screen.open" class="mr-2 action-btn" :aria-expanded="screen.open">{{screen.open ? '▼' : '►' }}</button>
@@ -267,9 +349,19 @@
             </div>
             <div v-show="screen.open" class="pl-6 items-container" :data-sidx="sIdx" :id="'items-'+screen.uid">
               <template v-for="(item, iIdx) in screen.items">
-                <div :key="item.uid" class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded" :style="{backgroundColor: screen.color, borderColor: screen.color, color: screen.textColor}">
+                <div
+                  :key="item.uid"
+                  class="menu-item mb-1 flex flex-wrap items-center gap-1 border p-1 rounded"
+                  :style="{ backgroundColor: screen.color, borderColor: screen.color, '--screen-text-color': screen.textColor || textColor }"
+                >
                   <textarea v-model="item.text" rows="2" cols="30" class="menu-text mr-1 border rounded p-1 flex-1" placeholder="Menu text"></textarea>
-                  <input v-model="item.screen" class="menu-screen mr-1 border rounded p-1 w-24" placeholder="Screen id">
+                  <input
+                    v-model="item.screen"
+                    :class="['menu-screen','mr-1','border','rounded','p-1','w-24', invalidMenuItemScreenIds.has(item.uid) ? 'invalid-field' : '']"
+                    placeholder="Screen id"
+                    :aria-invalid="invalidMenuItemScreenIds.has(item.uid) ? 'true' : null"
+                    :title="menuItemScreenTitle(item)"
+                  >
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
@@ -319,7 +411,13 @@
       <legend class="flex items-center gap-1">Commands</legend>
       <div v-for="(cmd,idx) in commands" :key="cmd.uid" class="flex items-center flex-wrap gap-2 mb-2">
         <input v-model="cmd.name" class="border rounded p-1 w-32" placeholder="Command">
-        <input v-model="cmd.screen" class="border rounded p-1 w-32" placeholder="Screen ID">
+        <input
+          v-model="cmd.screen"
+          :class="['border','rounded','p-1','w-32', invalidCommandScreenIds.has(cmd.uid) ? 'invalid-field' : '']"
+          placeholder="Screen ID"
+          :aria-invalid="invalidCommandScreenIds.has(cmd.uid) ? 'true' : null"
+          :title="commandScreenTitle(cmd)"
+        >
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
@@ -395,6 +493,12 @@
         <input type="text" id="bg-color-hex" class="ml-2 border rounded p-1 w-24" v-model="bgColor">
       </label>
     </fieldset>
+    <fieldset class="p-4 border rounded-lg shadow" title="Configure audio options.">
+      <legend class="flex items-center gap-1">Audio</legend>
+      <label class="block" title="Directory scanned for additional enter key audio clips.">Custom Sound Directory:
+        <input type="text" class="ml-2 border rounded p-1 w-full max-w-xs" v-model="customSoundDir" placeholder="e.g. sounds/custom">
+      </label>
+    </fieldset>
   </div>
 </form>
 </div>
@@ -410,26 +514,126 @@ const DEFAULT_TEXT_COLOR = '#7aff7a';
 const DEFAULT_BG_COLOR = '#041204';
 const DEFAULT_BORDER_COLOR = '#008800';
 const BASE_SCREEN_COLOR = '#0c2c5f';
+const DEFAULT_DOWNLOAD_BASENAME = 'config';
+const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/g;
 
-// Adjust the base color by a given amount and introduce a slight random
-// variation in each channel so that successive screens are easier to
-// differentiate.
-function shadeColor(col, amt) {
-  const num = parseInt(col.slice(1), 16);
-  const vary = () => Math.floor(Math.random() * 30) - 15; // -15 to +14
-  let r = (num >> 16) + amt + vary();
-  let g = (num >> 8 & 0x00ff) + amt + vary();
-  let b = (num & 0x0000ff) + amt + vary();
-  r = Math.max(0, Math.min(255, r));
-  g = Math.max(0, Math.min(255, g));
-  b = Math.max(0, Math.min(255, b));
-  return '#' + (r << 16 | g << 8 | b).toString(16).padStart(6, '0');
+function sanitizeDownloadBaseName(name){
+  const trimmed=(name||'').trim();
+  if(!trimmed) return DEFAULT_DOWNLOAD_BASENAME;
+  const cleaned=trimmed.replace(INVALID_FILENAME_CHARS,'').replace(/\s+/g,' ');
+  const withoutLeadingDots=cleaned.replace(/^\.+/, '');
+  const withoutTrailingDotsOrSpaces=withoutLeadingDots.replace(/[. ]+$/, '');
+  return withoutTrailingDotsOrSpaces || DEFAULT_DOWNLOAD_BASENAME;
+}
+
+function buildDownloadFileName(name){
+  let base=sanitizeDownloadBaseName(name);
+  if(!base.toLowerCase().endsWith('.json')){
+    base=`${base}.json`;
+  }
+  return base;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function hexToHsl(hex) {
+  let normalized = (hex || '').toString().trim();
+  if (normalized.startsWith('#')) {
+    normalized = normalized.slice(1);
+  }
+  if (normalized.length === 3) {
+    normalized = normalized.split('').map(ch => ch + ch).join('');
+  }
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    return { h: 210, s: 60, l: 30 };
+  }
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h *= 60;
+  }
+
+  return { h, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s = clamp(s, 0, 100) / 100;
+  l = clamp(l, 0, 100) / 100;
+
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+
+  let r;
+  let g;
+  let b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hk = h / 360;
+    r = hue2rgb(p, q, hk + 1 / 3);
+    g = hue2rgb(p, q, hk);
+    b = hue2rgb(p, q, hk - 1 / 3);
+  }
+
+  return '#' + [r, g, b].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+}
+
+// Generate screen accent colors by rotating hue and adjusting saturation/lightness.
+function generateScreenColor(baseHex, index) {
+  const base = hexToHsl(baseHex);
+  const hueStep = 37;
+  const lightCycle = [0, 6, -4, 12, -2, 8];
+  const satCycle = [0, -6, 5, -8, 7, -4];
+  const baseLightness = base.l + 28;
+  const baseSaturation = clamp(base.s, 45, 75);
+  const jitter = () => Math.random() * 4 - 2;
+  const hueJitter = () => Math.random() * 6 - 3;
+
+  const hue = (base.h + index * hueStep + hueJitter() + 360) % 360;
+  const lightness = clamp(baseLightness + lightCycle[index % lightCycle.length] + jitter(), 32, 82);
+  const saturation = clamp(baseSaturation + satCycle[index % satCycle.length] + jitter(), 38, 78);
+
+  const color = hslToHex(hue, saturation, lightness);
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : baseHex;
 }
 
 const app = Vue.createApp({
   data() {
     return {
         activeTab: 'content',
+        downloadName: DEFAULT_DOWNLOAD_BASENAME,
+        downloadUrl: '',
         screens: [],
         bootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
         lockedBootSequence:[{text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
@@ -450,23 +654,255 @@ const app = Vue.createApp({
         hackTextColor: DEFAULT_TEXT_COLOR,
         hackBgColor: DEFAULT_BG_COLOR,
         hackBorderColor: DEFAULT_BORDER_COLOR,
-        hackingHeader: ''
+        hackingHeader: '',
+        customSoundDir: '',
+        hasUnsavedChanges: false,
+        suppressUnsavedTracking: 0,
+        domUnsavedListeners: [],
+        beforeUnloadHandler: null,
+        collectionSnapshots: {
+          screens: '',
+          commands: '',
+          bootSequence: '',
+          lockedBootSequence: '',
+          difficulties: ''
+        }
       };
-    },
+  },
   computed: {
+    downloadFileName(){
+      return buildDownloadFileName(this.downloadName);
+    },
     difficultyOptions() {
       return ['Random', ...this.difficulties.map(d => d.name)];
     },
     difficultyTitle() {
       return this.difficulties.map(d => `${d.name} (${d.length[0]}-${d.length[1]} letters, ${d.wordCount[0]}-${d.wordCount[1]} words)`).join('; ') + '; Random selects any difficulty.';
+    },
+    screenReferenceValidation() {
+      return findInvalidScreenReferences(this.screens, this.commands);
+    },
+    invalidMenuItemScreenIds() {
+      return this.screenReferenceValidation.invalidMenuItemIds;
+    },
+    invalidCommandScreenIds() {
+      return this.screenReferenceValidation.invalidCommandIds;
     }
   },
   watch: {
-    textColor: 'applyTheme',
-    bgColor: 'applyTheme',
-    borderColor: 'applyTheme'
+    textColor: {
+      handler() {
+        this.applyTheme();
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    bgColor: {
+      handler() {
+        this.applyTheme();
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    borderColor: {
+      handler() {
+        this.applyTheme();
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    downloadName: {
+      handler() {
+        this.markUnsaved({ skipClear: true });
+      },
+      flush: 'sync'
+    },
+    screens: {
+      handler() {
+        const snapshot = this.serializeScreens();
+        const changed = snapshot !== this.collectionSnapshots.screens;
+        this.collectionSnapshots.screens = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    commands: {
+      handler() {
+        const snapshot = this.serializeCommands();
+        const changed = snapshot !== this.collectionSnapshots.commands;
+        this.collectionSnapshots.commands = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    bootSequence: {
+      handler() {
+        const snapshot = this.serializeBootSequence(this.bootSequence);
+        const changed = snapshot !== this.collectionSnapshots.bootSequence;
+        this.collectionSnapshots.bootSequence = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    lockedBootSequence: {
+      handler() {
+        const snapshot = this.serializeBootSequence(this.lockedBootSequence);
+        const changed = snapshot !== this.collectionSnapshots.lockedBootSequence;
+        this.collectionSnapshots.lockedBootSequence = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    difficulties: {
+      handler() {
+        const snapshot = this.serializeDifficulties();
+        const changed = snapshot !== this.collectionSnapshots.difficulties;
+        this.collectionSnapshots.difficulties = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
+    difficultyChoice: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackTextColor: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackBgColor: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackBorderColor: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    hackingHeader: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    customSoundDir: {
+      handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    }
   },
   methods: {
+      runWithoutUnsavedTracking(fn){
+        this.suppressUnsavedTracking++;
+        try {
+          if (typeof fn === 'function') {
+            fn();
+          }
+        } finally {
+          Promise.resolve().then(() => {
+            this.suppressUnsavedTracking = Math.max(0, this.suppressUnsavedTracking - 1);
+          });
+        }
+      },
+      markUnsaved(options={}){
+        if(this.suppressUnsavedTracking) return;
+        const { skipClear = false } = options;
+        if(!skipClear){
+          this.clearDownloadUrl();
+        }
+        this.hideGenerationFeedback();
+        this.hasUnsavedChanges = true;
+      },
+      resetUnsavedChanges(){
+        this.refreshCollectionSnapshots();
+        this.hasUnsavedChanges = false;
+      },
+      clearDownloadUrl(){
+        if(this.downloadUrl){
+          URL.revokeObjectURL(this.downloadUrl);
+          this.downloadUrl='';
+        }
+      },
+      setDownloadPanelVisible(visible){
+        const panel=document.getElementById('download-panel');
+        if(panel){
+          panel.classList.toggle('hidden', !visible);
+        }
+      },
+      hideGenerationFeedback(){
+        const feedback = document.getElementById('generate-feedback');
+        if(feedback){
+          feedback.classList.add('hidden');
+        }
+        this.setDownloadPanelVisible(!!this.downloadUrl);
+      },
+      serializeBootSequence(seq){
+        return JSON.stringify(seq.map(step=>({
+          text: step.text,
+          type: step.type
+        })));
+      },
+      serializeScreens(){
+        return JSON.stringify(this.screens.map(scr=>({
+          id: scr.id,
+          textColor: scr.textColor,
+          bgColor: scr.bgColor,
+          borderColor: scr.borderColor,
+          items: scr.items.map(it=>({
+            text: it.text,
+            screen: it.screen,
+            command: it.command
+          }))
+        })));
+      },
+      serializeCommands(){
+        return JSON.stringify(this.commands.map(cmd=>({
+          name: cmd.name,
+          screen: cmd.screen,
+          command: cmd.command,
+          help: !!cmd.help,
+          hacking: !!cmd.hacking,
+          action: cmd.action
+        })));
+      },
+      serializeDifficulties(){
+        return JSON.stringify(this.difficulties.map(diff=>({
+          name: diff.name,
+          wordCount: Array.isArray(diff.wordCount) ? [...diff.wordCount] : diff.wordCount,
+          length: Array.isArray(diff.length) ? [...diff.length] : diff.length
+        })));
+      },
+      refreshCollectionSnapshots(){
+        this.collectionSnapshots.screens = this.serializeScreens();
+        this.collectionSnapshots.commands = this.serializeCommands();
+        this.collectionSnapshots.bootSequence = this.serializeBootSequence(this.bootSequence);
+        this.collectionSnapshots.lockedBootSequence = this.serializeBootSequence(this.lockedBootSequence);
+        this.collectionSnapshots.difficulties = this.serializeDifficulties();
+      },
+      updateDownloadNameFromFile(fileName=''){
+        this.runWithoutUnsavedTracking(()=>{
+          const base=(fileName||'').replace(/\.json$/i,'');
+          this.downloadName=sanitizeDownloadBaseName(base);
+        });
+      },
       applyTheme() {
         const root = document.documentElement;
         root.style.setProperty('--text-color', this.textColor || DEFAULT_TEXT_COLOR);
@@ -477,9 +913,8 @@ const app = Vue.createApp({
         const text = this.textColor || DEFAULT_TEXT_COLOR;
         const bg = this.bgColor || DEFAULT_BG_COLOR;
         const border = this.borderColor || DEFAULT_BORDER_COLOR;
-        // Use a larger offset to make the shade differences more pronounced.
-        const offset = (this.screens.length % 10) * 20;
-        const color = shadeColor(BASE_SCREEN_COLOR, offset);
+        const index = this.screens.length;
+        const color = generateScreenColor(BASE_SCREEN_COLOR, index);
         this.screens.push({
           id,
           color,
@@ -544,6 +979,16 @@ const app = Vue.createApp({
           [items[iIdx], items[iIdx + 1]] = [items[iIdx + 1], items[iIdx]];
           this.$nextTick(this.initSortables);
         },
+        menuItemScreenTitle(item) {
+          if (!this.invalidMenuItemScreenIds.has(item.uid)) return 'Screen id';
+          const screen = (item.screen || '').trim();
+          return screen ? `Unknown screen "${screen}"` : 'Screen id';
+        },
+        commandScreenTitle(cmd) {
+          if (!this.invalidCommandScreenIds.has(cmd.uid)) return 'Screen ID';
+          const screen = (cmd.screen || '').trim();
+          return screen ? `Unknown screen "${screen}"` : 'Screen ID';
+        },
         addBootStep(seq) {
         seq.push({text:'', type:'terminal', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
         this.$nextTick(this.initSortables);
@@ -557,11 +1002,11 @@ const app = Vue.createApp({
         [seq[idx-1], seq[idx]] = [seq[idx], seq[idx-1]];
         this.$nextTick(this.initSortables);
         },
-        moveBootStepDown(seq, idx) {
+      moveBootStepDown(seq, idx) {
         if(idx>=seq.length-1) return;
         [seq[idx], seq[idx+1]] = [seq[idx+1], seq[idx]];
         this.$nextTick(this.initSortables);
-        },
+      },
         initSortables() {
         },
       addDifficulty(d={name:'', wordCount:[1,1], length:[1,1]}) {
@@ -573,74 +1018,173 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
       },
       loadConfig(config) {
-        document.getElementById('titles').value = (config.titleLines || []).join('\n');
-        document.getElementById('headers').value = (config.headerLines || []).join('\n');
-        this.bootSequence = (config.bootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
-        this.lockedBootSequence = (config.lockedBootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
-        if(!this.bootSequence.length) this.bootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-        if(!this.lockedBootSequence.length) this.lockedBootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-        this.screens = [];
-        this.commands = [];
-        const style = config.style || {};
-        const globalText = style.textColor || DEFAULT_TEXT_COLOR;
-        const globalBg = style.backgroundColor || DEFAULT_BG_COLOR;
-        const globalBorder = style.borderColor || DEFAULT_BORDER_COLOR;
-        this.textColor = globalText;
-        this.bgColor = globalBg;
-        this.borderColor = globalBorder;
-        const hackingStyle = config.hackingStyle || {};
-        this.hackTextColor = hackingStyle.textColor || globalText;
-        this.hackBgColor = hackingStyle.backgroundColor || globalBg;
-        this.hackBorderColor = hackingStyle.borderColor || globalBorder;
-        this.hackingHeader = (config.hacking && config.hacking.header) || '';
-        Object.entries(config.screens || {}).forEach(([id, data]) => {
-          const screen = {id, color:'#0c2c5f', items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
-          const items = Array.isArray(data) ? data : (data.items || []);
-          if(!Array.isArray(data) && data.style){
-            if(data.style.textColor) screen.textColor = data.style.textColor;
-            if(data.style.backgroundColor) screen.bgColor = data.style.backgroundColor;
-            if(data.style.borderColor) screen.borderColor = data.style.borderColor;
-          }
-          items.forEach(item=>{
-            if (typeof item === 'string') {
-              screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-            } else {
-              screen.items.push({
-                text: item.text || '',
-                screen: item.screen || '',
-                command: item.command || '',
-                uid: crypto.randomUUID?crypto.randomUUID():Math.random()
-              });
+        this.runWithoutUnsavedTracking(()=>{
+          this.clearDownloadUrl();
+          this.hideGenerationFeedback();
+          document.getElementById('titles').value = (config.titleLines || []).join('\n');
+          document.getElementById('headers').value = (config.headerLines || []).join('\n');
+          this.bootSequence = (config.bootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
+          this.lockedBootSequence = (config.lockedBootSequence || []).map(s=>({...s, uid:crypto.randomUUID?crypto.randomUUID():Math.random()}));
+          if(!this.bootSequence.length) this.bootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+          if(!this.lockedBootSequence.length) this.lockedBootSequence.push({text:'',type:'terminal',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+          this.screens = [];
+          this.commands = [];
+          const style = config.style || {};
+          const globalText = style.textColor || DEFAULT_TEXT_COLOR;
+          const globalBg = style.backgroundColor || DEFAULT_BG_COLOR;
+          const globalBorder = style.borderColor || DEFAULT_BORDER_COLOR;
+          this.textColor = globalText;
+          this.bgColor = globalBg;
+          this.borderColor = globalBorder;
+          const hackingStyle = config.hackingStyle || {};
+          this.hackTextColor = hackingStyle.textColor || globalText;
+          this.hackBgColor = hackingStyle.backgroundColor || globalBg;
+          this.hackBorderColor = hackingStyle.borderColor || globalBorder;
+          this.hackingHeader = (config.hacking && config.hacking.header) || '';
+          this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
+          Object.entries(config.screens || {}).forEach(([id, data]) => {
+            const color = generateScreenColor(BASE_SCREEN_COLOR, this.screens.length);
+            const screen = {id, color, items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
+            const items = Array.isArray(data) ? data : (data.items || []);
+            if(!Array.isArray(data) && data.style){
+              if(data.style.textColor) screen.textColor = data.style.textColor;
+              if(data.style.backgroundColor) screen.bgColor = data.style.backgroundColor;
+              if(data.style.borderColor) screen.borderColor = data.style.borderColor;
             }
+            items.forEach(item=>{
+              if (typeof item === 'string') {
+                screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+              } else {
+                screen.items.push({
+                  text: item.text || '',
+                  screen: item.screen || '',
+                  command: item.command || '',
+                  uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+                });
+              }
+            });
+            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+            this.screens.push(screen);
           });
-          if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
-          this.screens.push(screen);
-        });
-        Object.entries(config.commands || {}).forEach(([name, info])=>{
-          this.commands.push({
-            name,
-            screen: info.screen || '',
-            command: info.command || '',
-            help: !!info.help,
-            hacking: !!info.hacking,
-            action: info.action || '',
-            uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+          Object.entries(config.commands || {}).forEach(([name, info])=>{
+            this.commands.push({
+              name,
+              screen: info.screen || '',
+              command: info.command || '',
+              help: !!info.help,
+              hacking: !!info.hacking,
+              action: info.action || '',
+              uid: crypto.randomUUID?crypto.randomUUID():Math.random()
+            });
           });
+          document.getElementById('locked').checked = config.locked || false;
+          const diffs = config.hacking?.difficulties || defaultDifficulties;
+          this.difficulties = [];
+          diffs.forEach(d=>this.addDifficulty(d));
+          this.difficultyChoice = config.hacking?.difficulty ?? 'Random';
+          attemptsEl.value = config.hacking?.attempts ?? 4;
+          maxAttemptsEl.value = config.hacking?.maxAttempts ?? 4;
+          passwordEl.value = config.hacking?.password || '';
+          dudWordsEl.value = (config.hacking?.dudWords || []).join(', ');
+          this.$nextTick(this.initSortables);
         });
-        document.getElementById('locked').checked = config.locked || false;
-        const diffs = config.hacking?.difficulties || defaultDifficulties;
-        this.difficulties = [];
-        diffs.forEach(d=>this.addDifficulty(d));
-        this.difficultyChoice = config.hacking?.difficulty ?? 'Random';
-        attemptsEl.value = config.hacking?.attempts ?? 4;
-        maxAttemptsEl.value = config.hacking?.maxAttempts ?? 4;
-        passwordEl.value = config.hacking?.password || '';
-        dudWordsEl.value = (config.hacking?.dudWords || []).join(', ');
-        this.$nextTick(this.initSortables);
+        this.resetUnsavedChanges();
+      },
+      buildMissingTargetMessage(missingTargets) {
+        const details = [];
+        missingTargets.forEach((info, target) => {
+          const parts = [];
+          if(info.menuItems){
+            parts.push(`${info.menuItems} menu item${info.menuItems === 1 ? '' : 's'}`);
+          }
+          if(info.commands){
+            parts.push(`${info.commands} command${info.commands === 1 ? '' : 's'}`);
+          }
+          details.push(`"${target}" (${parts.join(' and ')})`);
+        });
+        if(!details.length) return '';
+        const suffix = details.length === 1 ? '' : 's';
+        return `Unknown screen reference${suffix}: ${details.join(', ')}.`;
+      },
+      showGenerationError(message) {
+        const feedback = document.getElementById('generate-feedback');
+        feedback.textContent = message || 'Resolve highlighted screen references before generating.';
+        feedback.classList.remove('hidden');
+        feedback.classList.remove('text-green-600');
+        feedback.classList.add('text-red-600');
+        this.clearDownloadUrl();
+        this.setDownloadPanelVisible(true);
+      },
+      showGenerationSuccess(message) {
+        const feedback = document.getElementById('generate-feedback');
+        feedback.textContent = message;
+        feedback.classList.remove('hidden');
+        feedback.classList.remove('text-red-600');
+        feedback.classList.add('text-green-600');
+        this.setDownloadPanelVisible(true);
+      },
+      handleDownloadClick(){
+        if(!this.downloadUrl) return;
+        this.resetUnsavedChanges();
+      },
+      confirmNavigation(message){
+        if(!this.hasUnsavedChanges) return true;
+        const prompt = message || 'You have unsaved changes. Continue without exporting your configuration?';
+        return window.confirm(prompt);
+      },
+      handleBackToTerminal(event){
+        if(event && (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1)){
+          return;
+        }
+        if(event) event.preventDefault();
+        if(!this.confirmNavigation()) return;
+        const href = event?.currentTarget?.getAttribute('href') || 'index.html';
+        const go=()=>{ window.location.href = href; };
+        if(typeof playSound === 'function'){
+          const audio=playSound('Pip/select3.wav');
+          if(audio && typeof audio.addEventListener === 'function'){
+            audio.addEventListener('ended', go, {once:true});
+            setTimeout(go,150);
+            return;
+          }
+        }
+        go();
+      },
+      handleBeforeUnload(event){
+        if(this.hasUnsavedChanges){
+          event.preventDefault();
+          event.returnValue='';
+        }
+      },
+      setupUnsavedTracking(){
+        const tracked=[
+          {id:'titles', event:'input'},
+          {id:'headers', event:'input'},
+          {id:'attempts', event:'input'},
+          {id:'max-attempts', event:'input'},
+          {id:'password', event:'input'},
+          {id:'dud-words', event:'input'},
+          {id:'locked', event:'change'}
+        ];
+        tracked.forEach(({id,event})=>{
+          const el=document.getElementById(id);
+          if(!el) return;
+          const handler=()=>this.markUnsaved();
+          el.addEventListener(event,handler);
+          this.domUnsavedListeners.push({el,event,handler});
+        });
+        this.beforeUnloadHandler=(e)=>this.handleBeforeUnload(e);
+        window.addEventListener('beforeunload', this.beforeUnloadHandler);
       },
       handleSubmit() {
       if (!validateDudWords()) {
         dudWordsEl.reportValidity();
+        return;
+      }
+      const validation = this.screenReferenceValidation;
+      if (validation.missingTargets.size) {
+        const message = this.buildMissingTargetMessage(validation.missingTargets);
+        this.showGenerationError(message);
         return;
       }
       const rawTitles = document.getElementById('titles').value.split('\n');
@@ -711,6 +1255,10 @@ const app = Vue.createApp({
       if (password) hacking.password = password;
       if (dudWords.length) hacking.dudWords = dudWords;
       if (this.hackingHeader) hacking.header = this.hackingHeader;
+      const customSoundDir = (this.customSoundDir || '').trim();
+      this.runWithoutUnsavedTracking(()=>{
+        this.downloadName = sanitizeDownloadBaseName(this.downloadName);
+      });
       const config = {
         titleLines: titles,
         headerLines: headers,
@@ -720,24 +1268,43 @@ const app = Vue.createApp({
         style,
         hackingStyle,
         locked,
+        customSoundDir,
         hacking
       };
       if(Object.keys(commandsObj).length) config.commands = commandsObj;
       const blob = new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'});
       const url = URL.createObjectURL(blob);
-      const dl = document.getElementById('download-link');
-      dl.href = url;
-      dl.classList.remove('hidden');
-      const feedback = document.getElementById('generate-feedback');
-      feedback.textContent = `Generated ${new Date().toLocaleTimeString()}`;
-      feedback.classList.remove('hidden');
+      const fileName = this.downloadFileName;
+      this.clearDownloadUrl();
+      this.downloadUrl = url;
+      this.showGenerationSuccess(`Generated ${fileName} at ${new Date().toLocaleTimeString()}`);
     }
   },
   mounted() {
-    this.addScreen('menu');
-    defaultDifficulties.forEach(d=>this.addDifficulty(d));
+    this.runWithoutUnsavedTracking(()=>{
+      this.addScreen('menu');
+      defaultDifficulties.forEach(d=>this.addDifficulty(d));
+    });
     this.$nextTick(this.initSortables);
     this.applyTheme();
+    this.setupUnsavedTracking();
+    this.resetUnsavedChanges();
+  },
+  beforeUnmount(){
+    if(this.downloadUrl){
+      URL.revokeObjectURL(this.downloadUrl);
+      this.downloadUrl='';
+    }
+    if(this.beforeUnloadHandler){
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler=null;
+    }
+    if(Array.isArray(this.domUnsavedListeners)){
+      this.domUnsavedListeners.forEach(({el,event,handler})=>{
+        if(el && handler) el.removeEventListener(event,handler);
+      });
+      this.domUnsavedListeners=[];
+    }
   }
 });
 
@@ -751,12 +1318,18 @@ document.getElementById('load-config').addEventListener('click', () => document.
 document.getElementById('config-file').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
+  if (vm.hasUnsavedChanges && !vm.confirmNavigation('You have unsaved changes that will be replaced by the loaded configuration. Continue?')) {
+    e.target.value = '';
+    return;
+  }
   const reader = new FileReader();
     reader.onload = () => {
       const config = JSON.parse(reader.result);
       vm.loadConfig(config);
+      vm.updateDownloadNameFromFile(file.name);
     };
   reader.readAsText(file);
+  e.target.value = '';
 });
 
 function playSound(src){
@@ -793,16 +1366,34 @@ tabButtons.forEach((btn,i)=>{
   });
 });
 
+const HOVER_SOUND_SELECTOR='button, a[href], input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
+function findHoverSoundTarget(element){
+  if(!(element instanceof Element)) return null;
+  const candidate=element.closest(HOVER_SOUND_SELECTOR);
+  if(!candidate) return null;
+  if(!candidate.closest('#builder-wrapper')) return null;
+  if(candidate.matches(':disabled')) return null;
+  if(candidate.getAttribute('aria-disabled')==='true') return null;
+  return candidate;
+}
+
 document.addEventListener('mouseover',e=>{
-  const btn=e.target.closest('button, a.top-line-btn');
-  if(!btn||btn.dataset.hoverSoundPlayed) return;
+  const hoverTarget=findHoverSoundTarget(e.target);
+  if(!hoverTarget) return;
+  if(hoverTarget.dataset.hoverSoundPlayed) return;
   playSound('Pip/Highlight4.wav');
-  btn.dataset.hoverSoundPlayed='1';
-  btn.addEventListener('mouseleave',()=>delete btn.dataset.hoverSoundPlayed,{once:true});
+  hoverTarget.dataset.hoverSoundPlayed='1';
+  const resetHoverSound=()=>{
+    delete hoverTarget.dataset.hoverSoundPlayed;
+  };
+  hoverTarget.addEventListener('mouseleave',resetHoverSound,{once:true});
+  hoverTarget.addEventListener('blur',resetHoverSound,{once:true});
 });
 document.addEventListener('focusin',e=>{
-  const btn=e.target.closest('button, a.top-line-btn');
-  if(btn) playSound('Pip/Highlight4.wav');
+  const focusTarget=findHoverSoundTarget(e.target);
+  if(!focusTarget) return;
+  if(focusTarget.dataset.hoverSoundPlayed) return;
+  playSound('Pip/Highlight4.wav');
 });
 
 const darkToggle=document.getElementById('dark-toggle');
@@ -828,15 +1419,6 @@ document.addEventListener('click',e=>{
 const backSelectPreload=new Audio('Pip/select3.wav');
 backSelectPreload.preload='auto';
 backSelectPreload.load();
-
-// Play select sound and navigate after it finishes
-document.getElementById('back-to-terminal').addEventListener('click',e=>{
-  e.preventDefault();
-  const audio=playSound('Pip/select3.wav');
-  const go=()=>{ window.location.href='index.html'; };
-  audio.addEventListener('ended',go,{once:true});
-  setTimeout(go,150);
-});
 
 const passwordEl = document.getElementById('password');
 const dudWordsEl = document.getElementById('dud-words');

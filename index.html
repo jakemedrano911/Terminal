@@ -138,6 +138,14 @@
     border:calc(1px * var(--scale)) solid var(--border-color);
     height:calc(4px * var(--scale));
   }
+  #pref-menu input[type=text]{
+    margin-left:calc(5px * var(--scale));
+    background:var(--terminal-bg);
+    color:var(--text-color);
+    border:calc(1px * var(--scale)) solid var(--border-color);
+    flex:1;
+    min-width:0;
+  }
   #pref-menu input[type=range]::-webkit-slider-thumb{
     -webkit-appearance:none;
     appearance:none;
@@ -348,6 +356,9 @@
             <option value="95">Fast</option>
           </select>
         </label>
+        <label title="Directory scanned for additional custom enter key sounds.">Custom Sound Dir
+          <input type="text" id="custom-sound-dir" placeholder="e.g. sounds/custom">
+        </label>
       </div>
     </div>
     <div id="config-container">
@@ -453,6 +464,7 @@ function trackAudio(audio){
   return audio;
 }
 
+const AUDIO_FILE_PATTERN=/\.(wav|mp3)(?:\?.*)?$/i;
 const preloadedAudios=[];
 
 function preloadAudio(src){
@@ -541,6 +553,11 @@ async function loadConfig(cycle=currentCycle){
     compSpeed=compBaseSpeed;
     if(compSpeedSelect) compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
   }
+  if(savedCustomSoundDir===null && typeof cfg.customSoundDir==='string'){
+    await setCustomSoundDir(cfg.customSoundDir,{persist:false});
+  }else{
+    await setCustomSoundDir(customSoundDir,{persist:false});
+  }
   if(cfg.style){
     const {textColor, backgroundColor, borderColor}=cfg.style;
     if(textColor) document.documentElement.style.setProperty('--text-color', textColor);
@@ -608,6 +625,8 @@ let typing=false;
 let baseDelay=10;
 let savedUserSpeed=localStorage.getItem('userSpeed');
 let savedCompSpeed=localStorage.getItem('compSpeed');
+let savedCustomSoundDir=localStorage.getItem('customSoundDir');
+let customSoundDir=savedCustomSoundDir!==null?savedCustomSoundDir:'';
 let userBaseSpeed=savedUserSpeed!==null?Number(savedUserSpeed):75;
 let compBaseSpeed=savedCompSpeed!==null?Number(savedCompSpeed):90;
 let userSpeed=userBaseSpeed;
@@ -664,6 +683,7 @@ const focusSlider=document.getElementById('focus-volume');
 const selectSlider=document.getElementById('select-volume');
 const userSpeedSelect=document.getElementById('user-speed-select');
 const compSpeedSelect=document.getElementById('comp-speed-select');
+const customSoundInput=document.getElementById('custom-sound-dir');
 const builderButton=document.getElementById('builder-button');
 
 prefButton.addEventListener('click',()=>{
@@ -693,6 +713,18 @@ humSlider.addEventListener('input',()=>{
 scrollSlider.addEventListener('input',()=>{scrollVolume=scrollSlider.value/100;});
 focusSlider.addEventListener('input',()=>{focusVolume=focusSlider.value/100;});
 selectSlider.addEventListener('input',()=>{selectVolume=selectSlider.value/100;});
+if(customSoundInput){
+  customSoundInput.value=customSoundDir;
+  customSoundInput.addEventListener('change',()=>{
+    setCustomSoundDir(customSoundInput.value,{persist:true});
+  });
+  customSoundInput.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      customSoundInput.blur();
+    }
+  });
+}
 const focusAudio=preloadAudio('Terminal 3/menu/menu_focus.wav');
 const charFocusAudios=[
   'Terminal 3/single/charsingle_01.wav',
@@ -713,6 +745,9 @@ const enterCharAudios=[
   'Terminal 3/enter/charenter_02.wav',
   'Terminal 3/enter/charenter_03.wav'
 ].map(preloadAudio);
+const customAudioCache=new Map();
+let customEnterAudios=[];
+let customSoundLoadToken=0;
 userSpeedSelect.value=String([58,75,91,100].includes(userBaseSpeed)?userBaseSpeed:75);
 compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
 userSpeedSelect.addEventListener('change',()=>{
@@ -1482,10 +1517,188 @@ function playWordFocusSound(){
   playCachedAudio(audio,focusVolume);
 }
 
+async function setCustomSoundDir(dir,{persist=true}={}){
+  const trimmed=(dir||'').trim();
+  if(persist){
+    if(trimmed){
+      localStorage.setItem('customSoundDir',trimmed);
+      savedCustomSoundDir=trimmed;
+    }else{
+      localStorage.removeItem('customSoundDir');
+      savedCustomSoundDir=null;
+    }
+  }
+  customSoundDir=trimmed;
+  if(customSoundInput && customSoundInput.value!==trimmed){
+    customSoundInput.value=trimmed;
+  }
+  await loadCustomSoundClips(trimmed);
+}
+
+async function loadCustomSoundClips(dir){
+  customSoundLoadToken++;
+  const token=customSoundLoadToken;
+  customEnterAudios=[];
+  if(!dir) return;
+  try{
+    const sources=await discoverCustomSoundSources(dir);
+    if(token!==customSoundLoadToken) return;
+    const audios=[];
+    const seen=new Set();
+    for(const src of sources){
+      if(!src || seen.has(src)) continue;
+      seen.add(src);
+      try{
+        const audio=getCachedCustomAudio(src);
+        audios.push(audio);
+        audio.addEventListener('error',()=>removeFailedCustomAudio(src,audio),{once:true});
+      }catch(err){
+        console.warn('Failed to preload custom sound',src,err);
+      }
+    }
+    customEnterAudios=audios;
+  }catch(err){
+    if(token===customSoundLoadToken){
+      console.warn('Failed to load custom sound directory',dir,err);
+    }
+  }
+}
+
+function removeFailedCustomAudio(src,audio){
+  const idx=customEnterAudios.indexOf(audio);
+  if(idx>=0) customEnterAudios.splice(idx,1);
+  if(customAudioCache.get(src)===audio){
+    customAudioCache.delete(src);
+  }
+}
+
+function getCachedCustomAudio(src){
+  if(customAudioCache.has(src)) return customAudioCache.get(src);
+  const audio=preloadAudio(src);
+  customAudioCache.set(src,audio);
+  return audio;
+}
+
+async function discoverCustomSoundSources(dir){
+  const trimmed=(dir||'').trim();
+  if(!trimmed) return [];
+  const attempts=[trimmed];
+  if(!trimmed.endsWith('/')) attempts.push(`${trimmed}/`);
+  const errors=[];
+  for(const attempt of attempts){
+    try{
+      const res=await fetch(attempt,{cache:'no-store'});
+      if(!res.ok){
+        errors.push(new Error(`HTTP ${res.status} ${res.statusText||''}`.trim()));
+        continue;
+      }
+      const contentType=res.headers.get('content-type')||'';
+      if(contentType.includes('application/json')){
+        const data=await res.json();
+        return extractAudioSourcesFromJson(data,res.url);
+      }
+      const text=await res.text();
+      const sources=extractAudioSourcesFromText(text,res.url);
+      if(sources.length) return sources;
+      if(AUDIO_FILE_PATTERN.test(res.url)){
+        return [res.url];
+      }
+      return [];
+    }catch(err){
+      errors.push(err);
+    }
+  }
+  if(errors.length){
+    throw errors[errors.length-1];
+  }
+  return [];
+}
+
+function extractAudioSourcesFromJson(data,baseUrl){
+  const stack=[data];
+  const entries=[];
+  while(stack.length){
+    const current=stack.pop();
+    if(!current) continue;
+    if(Array.isArray(current)){
+      for(let i=current.length-1;i>=0;i--) stack.push(current[i]);
+      continue;
+    }
+    if(typeof current==='string'){
+      entries.push(current);
+      continue;
+    }
+    if(typeof current==='object'){
+      for(const value of Object.values(current)){
+        stack.push(value);
+      }
+    }
+  }
+  return normalizeAudioSources(entries,baseUrl);
+}
+
+function extractAudioSourcesFromText(text,baseUrl){
+  const urls=new Set();
+  if(typeof DOMParser!=='undefined'){
+    try{
+      const parser=new DOMParser();
+      const doc=parser.parseFromString(text,'text/html');
+      doc.querySelectorAll('[href],[src]').forEach(el=>{
+        const value=el.getAttribute('href')||el.getAttribute('src');
+        if(value && AUDIO_FILE_PATTERN.test(value)){
+          urls.add(new URL(value,baseUrl).href);
+        }
+      });
+    }catch(err){
+      // Ignore parse errors
+    }
+  }
+  if(!urls.size){
+    const regex=/[^\s"'<>]+?\.(?:wav|mp3)(?:\?[^\s"'<>]*)?/gi;
+    let match;
+    while((match=regex.exec(text))){
+      try{
+        urls.add(new URL(match[0],baseUrl).href);
+      }catch(_err){/* ignore invalid URLs */}
+    }
+  }
+  return Array.from(urls);
+}
+
+function normalizeAudioSources(entries,baseUrl){
+  const seen=new Set();
+  const result=[];
+  for(const entry of entries){
+    if(typeof entry!=='string') continue;
+    const trimmed=entry.trim();
+    if(!trimmed || !AUDIO_FILE_PATTERN.test(trimmed)) continue;
+    try{
+      const url=new URL(trimmed,baseUrl).href;
+      if(!seen.has(url)){
+        seen.add(url);
+        result.push(url);
+      }
+    }catch(_err){
+      // Ignore invalid URLs
+    }
+  }
+  return result;
+}
+
 function playEnterCharSound(){
   if(!powered) return;
   const audio=enterCharAudios[Math.floor(Math.random()*enterCharAudios.length)];
   playCachedAudio(audio,selectVolume);
+  if(customEnterAudios.length){
+    const customAudio=customEnterAudios[Math.floor(Math.random()*customEnterAudios.length)];
+    if(customAudio){
+      try{
+        playCachedAudio(customAudio,selectVolume);
+      }catch(err){
+        console.warn('Custom sound playback failed',err);
+      }
+    }
+  }
 }
 
 function playPasswordResult(correct){
