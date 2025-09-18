@@ -474,6 +474,18 @@
           :title="commandScreenTitle(cmd)"
         >
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
+        <div class="flex flex-col w-48">
+          <label class="flex items-center gap-1 text-sm" :title="commandActionTooltip(cmd.action)">
+            Action:
+            <select v-model="cmd.action" class="border rounded p-1 w-36">
+              <option v-if="commandActionIsCustom(cmd.action)" :value="cmd.action">Custom: {{ cmd.action }}</option>
+              <option v-for="opt in commandActionOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </label>
+          <p v-if="commandActionTooltip(cmd.action)" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ commandActionTooltip(cmd.action) }}
+          </p>
+        </div>
         <button
           type="button"
           class="action-btn sound-toggle-btn"
@@ -631,6 +643,14 @@ const SOUND_FIELD_DEFINITIONS = [
   { key: 'powerOff', label: 'Power Off', description: 'Played when the terminal powers down.' }
 ];
 const SOUND_FIELD_KEYS = SOUND_FIELD_DEFINITIONS.map(def => def.key);
+const COMMAND_ACTION_OPTIONS = [
+  { value: '', label: 'None', description: 'No special handling. Uses screen/command fields as entered.' },
+  { value: 'back', label: 'Back', description: 'Returns to the previous menu screen.' },
+  { value: 'help', label: 'Help', description: 'Displays the built-in help text.' },
+  { value: 'syntaxhelper', label: 'Syntax Helper', description: 'Opens the syntax helper screen.' },
+  { value: 'adminoverride', label: 'Admin Override', description: 'Unlocks a locked terminal immediately.' },
+  { value: 'adminallowances', label: 'Admin Allowances', description: 'Applies allowances to the current terminal session.' }
+];
 
 function createUid(){
   if(typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'){
@@ -788,8 +808,10 @@ const app = Vue.createApp({
         hackBorderColor: DEFAULT_BORDER_COLOR,
         hackingHeader: '',
         customSoundDir: '',
+        extraSoundOverrides: {},
         soundFieldDefs: SOUND_FIELD_DEFINITIONS,
         soundSettings: createEmptySoundSettings(),
+        commandActionOptions: COMMAND_ACTION_OPTIONS,
         hasUnsavedChanges: false,
         suppressUnsavedTracking: 0,
         domUnsavedListeners: [],
@@ -948,6 +970,17 @@ const app = Vue.createApp({
       deep: true,
       flush: 'sync'
     },
+    extraSoundOverrides: {
+      handler() {
+        const snapshot = this.serializeSounds();
+        const changed = snapshot !== this.collectionSnapshots.sounds;
+        this.collectionSnapshots.sounds = snapshot;
+        if(this.suppressUnsavedTracking || !changed) return;
+        this.markUnsaved();
+      },
+      deep: true,
+      flush: 'sync'
+    },
     customSoundDir: {
       handler() {
         this.markUnsaved();
@@ -1040,14 +1073,24 @@ const app = Vue.createApp({
         })));
       },
       serializeSounds(){
-        const snapshot=SOUND_FIELD_KEYS.map(key=>{
-          const value=(this.soundSettings[key]||'').trim();
-          return value?{key,value}:null;
-        }).filter(Boolean);
-        return JSON.stringify(snapshot);
+        const snapshot={};
+        SOUND_FIELD_KEYS.forEach(key=>{
+          snapshot[key]=(this.soundSettings[key]||'').trim();
+        });
+        Object.entries(this.extraSoundOverrides || {}).forEach(([key,value])=>{
+          snapshot[key]=typeof value==='string'?value:'';
+        });
+        const extraKeys=Object.keys(this.extraSoundOverrides || {}).filter(key=>!SOUND_FIELD_KEYS.includes(key)).sort();
+        const orderedKeys=[...SOUND_FIELD_KEYS, ...extraKeys];
+        return JSON.stringify(snapshot, orderedKeys);
       },
       collectSoundOverrides(){
         const overrides={};
+        Object.entries(this.extraSoundOverrides || {}).forEach(([key,value])=>{
+          if(typeof value==='string'){
+            overrides[key]=value;
+          }
+        });
         SOUND_FIELD_KEYS.forEach(key=>{
           const value=(this.soundSettings[key]||'').trim();
           if(value) overrides[key]=value;
@@ -1165,6 +1208,16 @@ const app = Vue.createApp({
           if(!target) return;
           target.showSoundEditor = !target.showSoundEditor;
         },
+        commandActionTooltip(action){
+          const match=this.commandActionOptions.find(opt=>opt.value===action);
+          if(match) return match.description;
+          if(action) return `Custom action "${action}" will be preserved.`;
+          return '';
+        },
+        commandActionIsCustom(action){
+          if(!action) return false;
+          return !this.commandActionOptions.some(opt=>opt.value===action);
+        },
         addBootStep(seq) {
         seq.push({text:'', type:'terminal', uid:createUid()});
         this.$nextTick(this.initSortables);
@@ -1219,13 +1272,19 @@ const app = Vue.createApp({
           this.hackingHeader = (config.hacking && config.hacking.header) || '';
           this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
           const soundSettings = createEmptySoundSettings();
+          const extraSounds = {};
           if(config.sounds && typeof config.sounds === 'object'){
-            SOUND_FIELD_KEYS.forEach(key=>{
-              const value=config.sounds[key];
-              soundSettings[key]=typeof value==='string'?value.trim():'';
+            Object.entries(config.sounds).forEach(([key,value])=>{
+              if(typeof value!=='string') return;
+              if(SOUND_FIELD_KEYS.includes(key)){
+                soundSettings[key]=value.trim();
+              }else{
+                extraSounds[key]=value;
+              }
             });
           }
           this.soundSettings = soundSettings;
+          this.extraSoundOverrides = extraSounds;
           Object.entries(config.screens || {}).forEach(([id, data]) => {
             const color = generateScreenColor(BASE_SCREEN_COLOR, this.screens.length);
             const screen = {id, color, items:[], open:true, uid:createUid(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
@@ -1407,13 +1466,22 @@ const app = Vue.createApp({
           const screen=(it.screen||'').trim();
           const command=(it.command||'').trim();
           const sound=(it.sound||'').trim();
-          if(!text && !screen && !command) return;
-          const baseSound=sound?{sound}:null;
-          if(screen && command){ items.push(baseSound?{...baseSound,text,screen,command}:{text,screen,command}); }
-          else if(screen){ items.push(baseSound?{...baseSound,text,screen}:{text,screen}); }
-          else if(command){ items.push(baseSound?{...baseSound,text,command}:{text,command}); }
-          else if(baseSound){ items.push({ ...baseSound, text }); }
-          else { items.push(text); }
+          if(!text && !screen && !command && !sound) return;
+          const hasSound=!!sound;
+          const base=hasSound?{sound}:{};
+          if(screen && command){
+            items.push({...base, text, screen, command});
+          }else if(screen){
+            items.push({...base, text, screen});
+          }else if(command){
+            items.push({...base, text, command});
+          }else if(hasSound){
+            const soundOnly={...base};
+            if(text) soundOnly.text=text;
+            items.push(soundOnly);
+          }else{
+            items.push(text);
+          }
         });
         const style = {};
         if(scr.textColor !== textColor) style.textColor = scr.textColor;
