@@ -8,7 +8,12 @@
     window.tailwind.config = { darkMode: 'class' };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="libs/vue.global.prod.js"></script>
+  <script>
+    if (!window.Vue) {
+      document.write('<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js" defer><\\/script>');
+    }
+  </script>
   <script src="builder-utils.js"></script>
   <style>
     @font-face{
