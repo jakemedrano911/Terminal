@@ -363,6 +363,7 @@
                     :title="menuItemScreenTitle(item)"
                   >
                   <input v-model="item.command" class="menu-command mr-1 border rounded p-1 w-32" placeholder="Command">
+                  <input v-model="item.sound" class="menu-sound mr-1 border rounded p-1 w-32" placeholder="Sound">
                   <button type="button" @click="moveMenuItemUp(sIdx, iIdx)" :disabled="iIdx===0" class="mr-1 action-btn" title="Move up">▲</button>
                   <button type="button" @click="moveMenuItemDown(sIdx, iIdx)" :disabled="iIdx===screen.items.length-1" class="mr-1 action-btn" title="Move down">▼</button>
                     <button type="button" @click="removeMenuItem(sIdx, iIdx)" class="action-btn" title="Remove item"><span class="w-4 h-4 flex items-center justify-center delete-icon">&times;</span></button>
@@ -419,6 +420,7 @@
           :title="commandScreenTitle(cmd)"
         >
         <input v-model="cmd.command" class="border rounded p-1 w-32" placeholder="Response">
+        <input v-model="cmd.sound" class="border rounded p-1 w-32" placeholder="Sound">
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.help">Help</label>
         <label class="flex items-center gap-1"><input type="checkbox" v-model="cmd.hacking">Hacking</label>
         <div class="flex gap-1">
@@ -869,7 +871,8 @@ const app = Vue.createApp({
           items: scr.items.map(it=>({
             text: it.text,
             screen: it.screen,
-            command: it.command
+            command: it.command,
+            sound: it.sound
           }))
         })));
       },
@@ -878,6 +881,7 @@ const app = Vue.createApp({
           name: cmd.name,
           screen: cmd.screen,
           command: cmd.command,
+          sound: cmd.sound,
           help: !!cmd.help,
           hacking: !!cmd.hacking,
           action: cmd.action
@@ -918,7 +922,7 @@ const app = Vue.createApp({
         this.screens.push({
           id,
           color,
-          items:[{text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
+          items:[{text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()}],
           open:true,
           uid:crypto.randomUUID?crypto.randomUUID():Math.random(),
           textColor:text,
@@ -932,7 +936,7 @@ const app = Vue.createApp({
         this.$nextTick(this.initSortables);
       },
       addCommand() {
-        this.commands.push({name:'',screen:'',command:'',help:false,hacking:false,action:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        this.commands.push({name:'',screen:'',command:'',sound:'',help:false,hacking:false,action:'',uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
       },
       removeCommand(idx) {
         this.commands.splice(idx,1);
@@ -948,7 +952,7 @@ const app = Vue.createApp({
         [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       },
       addMenuItem(screen) {
-        screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+        screen.items.push({text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
         this.$nextTick(this.initSortables);
       },
         removeMenuItem(sIdx, iIdx) {
@@ -1053,17 +1057,18 @@ const app = Vue.createApp({
             }
             items.forEach(item=>{
               if (typeof item === 'string') {
-                screen.items.push({text:item, screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+                screen.items.push({text:item, screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
               } else {
                 screen.items.push({
                   text: item.text || '',
                   screen: item.screen || '',
                   command: item.command || '',
+                  sound: item.sound || '',
                   uid: crypto.randomUUID?crypto.randomUUID():Math.random()
                 });
               }
             });
-            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
+            if(!screen.items.length) screen.items.push({text:'', screen:'', command:'', sound:'', uid:crypto.randomUUID?crypto.randomUUID():Math.random()});
             this.screens.push(screen);
           });
           Object.entries(config.commands || {}).forEach(([name, info])=>{
@@ -1071,6 +1076,7 @@ const app = Vue.createApp({
               name,
               screen: info.screen || '',
               command: info.command || '',
+              sound: info.sound || '',
               help: !!info.help,
               hacking: !!info.hacking,
               action: info.action || '',
@@ -1212,11 +1218,17 @@ const app = Vue.createApp({
           const text=(it.text||'').trimEnd();
           const screen=(it.screen||'').trim();
           const command=(it.command||'').trim();
-          if(!text && !screen && !command) return;
-          if(screen && command){ items.push({text,screen,command}); }
-          else if(screen){ items.push({text,screen}); }
-          else if(command){ items.push({text,command}); }
-          else { items.push(text); }
+          const sound=(it.sound||'').trim();
+          if(!text && !screen && !command && !sound) return;
+          if(screen || command || sound){
+            const entry={text};
+            if(screen) entry.screen=screen;
+            if(command) entry.command=command;
+            if(sound) entry.sound=sound;
+            items.push(entry);
+          }else{
+            items.push(text);
+          }
         });
         const style = {};
         if(scr.textColor !== textColor) style.textColor = scr.textColor;
@@ -1231,10 +1243,12 @@ const app = Vue.createApp({
         const screen=(c.screen||'').trim();
         const message=(c.command||'').trim();
         const action=(c.action||'').trim();
+        const sound=(c.sound||'').trim();
         const obj={};
         if(screen) obj.screen=screen;
         if(message) obj.command=message;
         if(action) obj.action=action;
+        if(sound) obj.sound=sound;
         if(c.help) obj.help=true;
         if(c.hacking) obj.hacking=true;
         if(Object.keys(obj).length) commandsObj[name]=obj;

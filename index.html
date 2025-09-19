@@ -537,6 +537,7 @@ async function loadConfig(cycle=currentCycle){
         const item={text:`> ${name}`};
         if(info.screen) item.screen=info.screen;
         if(info.command) item.command=info.command;
+        if(info.sound) item.sound=info.sound;
         const helpItems=screens.help;
         const retIdx=helpItems.findIndex(it=>typeof it==='object' && it.screen==='menu');
         if(retIdx>=0) helpItems.splice(retIdx,0,item); else helpItems.push(item);
@@ -1351,6 +1352,9 @@ async function executeCustomCommand(info){
 }
 
 async function executeCommand(info, rawCmd){
+  if(info.sound){
+    playConfiguredSound(info.sound);
+  }
   if(info.action){
     switch(info.action){
       case 'syntaxhelper':
@@ -1630,6 +1634,66 @@ function getCachedCustomAudio(src){
   const audio=preloadAudio(src);
   customAudioCache.set(src,audio);
   return audio;
+}
+
+const SOUND_SCHEME_PATTERN=/^[a-z][a-z0-9+.-]*:/i;
+
+function isAbsoluteSoundPath(path){
+  return SOUND_SCHEME_PATTERN.test(path) || path.startsWith('//') || path.startsWith('/');
+}
+
+function buildSoundCandidates(sound){
+  const trimmed=(sound||'').trim();
+  if(!trimmed) return [];
+  const candidates=[];
+  const seen=new Set();
+  const addCandidate=src=>{
+    if(!src || seen.has(src)) return;
+    seen.add(src);
+    candidates.push(src);
+  };
+  if(isAbsoluteSoundPath(trimmed)){
+    addCandidate(trimmed);
+    return candidates;
+  }
+  if(customSoundDir){
+    try{
+      const baseUrl=new URL(customSoundDir, window.location.href);
+      addCandidate(new URL(trimmed, baseUrl).href);
+    }catch(_err){
+      const base=customSoundDir.endsWith('/')?customSoundDir:`${customSoundDir}/`;
+      addCandidate(`${base}${trimmed.replace(/^\.?\/+/,'')}`);
+    }
+  }
+  addCandidate(trimmed);
+  return candidates;
+}
+
+function playConfiguredSound(sound,{volume=selectVolume}={}){
+  if(!powered) return false;
+  const candidates=buildSoundCandidates(sound);
+  if(!candidates.length) return false;
+  let started=false;
+  const playCandidate=index=>{
+    if(index>=candidates.length) return;
+    const src=candidates[index];
+    try{
+      const audio=getCachedCustomAudio(src);
+      const handleError=()=>{
+        audio.removeEventListener('error',handleError);
+        activeAudios.delete(audio);
+        playCandidate(index+1);
+      };
+      audio.addEventListener('error',handleError,{once:true});
+      playCachedAudio(audio,volume);
+      started=true;
+    }catch(err){
+      console.warn('Failed to play configured sound',src,err);
+      playCandidate(index+1);
+    }
+  };
+  playCandidate(0);
+  return started;
 }
 
 async function discoverCustomSoundSources(dir){
@@ -1997,7 +2061,13 @@ async function showScreen(name){
         div.tabIndex=0;
         await typeText(div,line.text);
         div.addEventListener('click',async()=>{
-          playSelectSound();
+          let soundPlayed=false;
+          if(line.sound){
+            soundPlayed=playConfiguredSound(line.sound);
+          }
+          if(!soundPlayed){
+            playSelectSound();
+          }
           if(line.screen){
             await showScreen(line.screen);
             if(line.command){

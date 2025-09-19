@@ -43,7 +43,7 @@
   "compSpeed": 90,
   "screens": {
     "menu": [
-      { "text": "> Protectron Schematics", "screen": "protectron" },
+      { "text": "> Protectron Schematics", "screen": "protectron", "sound": "Terminal 4/HDD/HDD1/HDD101.wav" },
       { "text": "> Mr. Handy Service Records", "screen": "handy" },
       { "text": "> Assaultron Combat Models", "screen": "assaultron" },
       { "text": "> Securitron Systems Control", "screen": "securitron" },
@@ -112,7 +112,7 @@
     "turret": [
       "== TURRET CONTROLS ==",
       "",
-      { "text": "> Activate Turrets", "command": "Live fire mode engaged" },
+      { "text": "> Activate Turrets", "command": "Live fire mode engaged", "sound": "Terminal 3/enter/charenter_02.wav" },
       { "text": "> Deactivate Turrets", "command": "Turrets placed in standby mode" },
       "",
       { "text": "> RETURN", "screen": "menu" }
@@ -143,7 +143,7 @@
     ]
   },
   "commands": {
-    "back": { "action": "back" },
+    "back": { "action": "back", "sound": "Terminal 4/HDD/HDD1/HDD102.wav" },
     "help": { "action": "help", "help": true },
     "?": { "action": "help", "help": true },
     "syntaxhelper": { "action": "syntaxhelper", "hacking": true },
