@@ -497,8 +497,21 @@
     </fieldset>
     <fieldset class="p-4 border rounded-lg shadow" title="Configure audio options.">
       <legend class="flex items-center gap-1">Audio</legend>
-      <label class="block" title="Directory scanned for additional enter key audio clips.">Custom Sound Directory:
-        <input type="text" class="ml-2 border rounded p-1 w-full max-w-xs" v-model="customSoundDir" placeholder="e.g. sounds/custom">
+      <label class="block" title="Select where to load additional enter key audio clips.">Custom Sound Source:
+        <div class="mt-2 flex flex-col gap-2">
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" class="border rounded p-1" value="url" v-model="customSoundMode">
+            <span>Hosted URL</span>
+          </label>
+          <div class="ml-6" v-if="customSoundMode==='url'">
+            <input type="text" class="border rounded p-1 w-full max-w-xs" v-model="customSoundDir" placeholder="e.g. sounds/custom">
+          </div>
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" class="border rounded p-1" value="local" v-model="customSoundMode">
+            <span>Pick a local folder when the terminal loads</span>
+          </label>
+        </div>
+        <p class="mt-2 text-sm text-gray-600 dark:text-[color:rgba(122,255,122,0.7)]">Local folders require browser permission at runtime; hosted URLs continue to work on GitHub Pages or other servers.</p>
       </label>
     </fieldset>
   </div>
@@ -658,6 +671,7 @@ const app = Vue.createApp({
         hackBorderColor: DEFAULT_BORDER_COLOR,
         hackingHeader: '',
         customSoundDir: '',
+        customSoundMode: 'url',
         hasUnsavedChanges: false,
         suppressUnsavedTracking: 0,
         domUnsavedListeners: [],
@@ -806,6 +820,15 @@ const app = Vue.createApp({
     },
     customSoundDir: {
       handler() {
+        this.markUnsaved();
+      },
+      flush: 'sync'
+    },
+    customSoundMode: {
+      handler() {
+        if(this.customSoundMode==='local'){
+          this.customSoundDir='';
+        }
         this.markUnsaved();
       },
       flush: 'sync'
@@ -1045,7 +1068,23 @@ const app = Vue.createApp({
           this.hackBgColor = hackingStyle.backgroundColor || globalBg;
           this.hackBorderColor = hackingStyle.borderColor || globalBorder;
           this.hackingHeader = (config.hacking && config.hacking.header) || '';
-          this.customSoundDir = typeof config.customSoundDir === 'string' ? config.customSoundDir : '';
+          const src=config.customSoundSource;
+          if(src && typeof src==='object'){
+            const type=(src.type||src.kind||'').toLowerCase();
+            if(type==='local'){
+              this.customSoundMode='local';
+              this.customSoundDir='';
+            }else if(type==='url' && typeof src.value==='string'){
+              this.customSoundMode='url';
+              this.customSoundDir=src.value;
+            }else{
+              this.customSoundMode='url';
+              this.customSoundDir=typeof config.customSoundDir==='string'?config.customSoundDir:'';
+            }
+          }else{
+            this.customSoundMode='url';
+            this.customSoundDir=typeof config.customSoundDir==='string'?config.customSoundDir:'';
+          }
           Object.entries(config.screens || {}).forEach(([id, data]) => {
             const color = generateScreenColor(BASE_SCREEN_COLOR, this.screens.length);
             const screen = {id, color, items:[], open:true, uid:crypto.randomUUID?crypto.randomUUID():Math.random(), textColor:globalText, bgColor:globalBg, borderColor:globalBorder};
@@ -1274,6 +1313,13 @@ const app = Vue.createApp({
       if (dudWords.length) hacking.dudWords = dudWords;
       if (this.hackingHeader) hacking.header = this.hackingHeader;
       const customSoundDir = (this.customSoundDir || '').trim();
+      const customSoundMode = this.customSoundMode;
+      let customSoundSource = null;
+      if(customSoundMode === 'url' && customSoundDir){
+        customSoundSource = {type:'url', value:customSoundDir};
+      }else if(customSoundMode === 'local'){
+        customSoundSource = {type:'local'};
+      }
       this.runWithoutUnsavedTracking(()=>{
         this.downloadName = sanitizeDownloadBaseName(this.downloadName);
       });
@@ -1286,9 +1332,14 @@ const app = Vue.createApp({
         style,
         hackingStyle,
         locked,
-        customSoundDir,
         hacking
       };
+      if(customSoundMode === 'url' && customSoundDir){
+        config.customSoundDir = customSoundDir;
+      }
+      if(customSoundSource){
+        config.customSoundSource = customSoundSource;
+      }
       if(Object.keys(commandsObj).length) config.commands = commandsObj;
       const blob = new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'});
       const url = URL.createObjectURL(blob);

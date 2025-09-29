@@ -55,3 +55,35 @@ Use the **Prefs** button beside the terminal to adjust audio volumes or typing
 speeds. Setting the **User Speed** or **Computer Speed** slider to `0` skips its
 respective animation entirely. Your chosen settings are stored in your browser
 and restored on the next visit.
+
+## Offline installation
+
+The terminal now ships with a Progressive Web App shell so it can keep working
+without an active network connection.
+
+1. Open `index.html` from a local server or your preferred hosting provider.
+2. Use your browser's install prompt (or the “Add to Home Screen” option on
+   mobile) to install **RobCo Termlink**.
+3. The first load caches `index.html`, the builder, configuration, fonts, and
+   all bundled audio. Future launches can run entirely offline.
+
+If you update the project files, revisit the page once online to refresh the
+cache. A lightweight static server such as `python -m http.server` still works
+for local testing, but the install step is no longer required once the cache is
+primed.
+
+## Custom audio sources
+
+Custom enter-key sounds can now come from either hosted URLs or a local folder:
+
+- Enter a web-accessible directory (for example, a GitHub Pages folder or a
+  local server) in **Custom Sound Source → Hosted URL** and the terminal will
+  fetch `.wav` and `.mp3` files as before.
+- Choose **Pick a local folder when the terminal loads** in the builder to have
+  the running terminal prompt for a folder using the File System Access API.
+  Once granted, the selection is remembered in the browser and works offline.
+
+When working offline, remember that hosted URLs still need to be reachable over
+HTTP/HTTPS. Local folders are only available in browsers that support
+`window.showDirectoryPicker`; if unavailable, the Hosted URL option remains the
+fallback.

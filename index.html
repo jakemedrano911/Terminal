@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#041204">
 <title>ROBCO INDUSTRIES (TM) TERMLINK PROTOCOL</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/terminal.svg">
 <style>
   @font-face{
     font-family:"FSEX300";
@@ -145,6 +148,36 @@
     border:calc(1px * var(--scale)) solid var(--border-color);
     flex:1;
     min-width:0;
+  }
+  #pref-menu .custom-sound-controls{
+    display:flex;
+    gap:calc(4px * var(--scale));
+    margin-top:calc(4px * var(--scale));
+    width:100%;
+  }
+  #pref-menu .custom-sound-controls input[type=text]{
+    margin-left:0;
+  }
+  #pref-menu .custom-sound-controls button{
+    background:var(--terminal-bg);
+    color:var(--text-color);
+    border:calc(1px * var(--scale)) solid var(--border-color);
+    font-family:inherit;
+    font-size:calc(12px * var(--scale) * 0.9);
+    padding:calc(3px * var(--scale)) calc(6px * var(--scale));
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  #pref-menu .custom-sound-controls button:disabled{
+    opacity:0.5;
+    cursor:default;
+  }
+  #pref-menu .custom-sound-note{
+    display:block;
+    margin-top:calc(4px * var(--scale));
+    font-size:calc(11px * var(--scale) * 0.9);
+    color:var(--text-color);
+    opacity:0.8;
   }
   #pref-menu input[type=range]::-webkit-slider-thumb{
     -webkit-appearance:none;
@@ -357,7 +390,12 @@
           </select>
         </label>
         <label title="Directory scanned for additional custom enter key sounds.">Custom Sound Dir
-          <input type="text" id="custom-sound-dir" placeholder="e.g. sounds/custom">
+          <div class="custom-sound-controls">
+            <input type="text" id="custom-sound-dir" placeholder="e.g. sounds/custom">
+            <button type="button" id="custom-sound-picker">Pick Folder</button>
+            <button type="button" id="custom-sound-clear">Clear</button>
+          </div>
+          <span class="custom-sound-note" id="custom-sound-note">Supports hosted URLs or local folders.</span>
         </label>
       </div>
     </div>
@@ -465,6 +503,12 @@ function trackAudio(audio){
 }
 
 const AUDIO_FILE_PATTERN=/\.(wav|mp3)(?:\?.*)?$/i;
+const CUSTOM_SOUND_SOURCE_STORAGE_KEY='customSoundSource';
+const LEGACY_CUSTOM_SOUND_DIR_KEY='customSoundDir';
+const CUSTOM_SOUND_HANDLE_KEY='custom-sound-folder';
+const CUSTOM_SOUND_DB_NAME='terminal-sound-handles';
+const CUSTOM_SOUND_DB_STORE='handles';
+let directoryHandleDbPromise=null;
 const preloadedAudios=[];
 
 function preloadAudio(src){
@@ -554,11 +598,8 @@ async function loadConfig(cycle=currentCycle){
     compSpeed=compBaseSpeed;
     if(compSpeedSelect) compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
   }
-  if(savedCustomSoundDir===null && typeof cfg.customSoundDir==='string'){
-    await setCustomSoundDir(cfg.customSoundDir,{persist:false});
-  }else{
-    await setCustomSoundDir(customSoundDir,{persist:false});
-  }
+  const configSoundSource=parseConfigCustomSoundSource(cfg);
+  await applyInitialCustomSoundSource(configSoundSource);
   if(cfg.style){
     const {textColor, backgroundColor, borderColor}=cfg.style;
     if(textColor) document.documentElement.style.setProperty('--text-color', textColor);
@@ -579,6 +620,47 @@ async function loadConfig(cycle=currentCycle){
   };
   startLocked=cfg.locked!==undefined?cfg.locked:true;
   if(hasHacked) startLocked=false;
+}
+
+function parseConfigCustomSoundSource(cfg){
+  if(!cfg) return null;
+  const src=cfg.customSoundSource;
+  if(src && typeof src==='object'){
+    const type=(src.type||src.kind||'').toLowerCase();
+    if(type==='url' && typeof src.value==='string'){
+      return {kind:'url',url:src.value};
+    }
+    if(type==='local'){
+      return {kind:'local'};
+    }
+  }
+  if(typeof cfg.customSoundDir==='string' && cfg.customSoundDir.trim()){
+    return {kind:'url',url:cfg.customSoundDir};
+  }
+  return null;
+}
+
+async function applyInitialCustomSoundSource(configSource){
+  if(savedCustomSoundSourceDescriptor){
+    const restored=await restoreSavedCustomSoundSource(savedCustomSoundSourceDescriptor);
+    savedCustomSoundSourceDescriptor=null;
+    if(restored) return;
+  }
+  if(configSource){
+    if(configSource.kind==='url'){
+      preferredCustomSoundMode='url';
+      await setCustomSoundSource({kind:'url',url:configSource.url},{persist:false});
+      return;
+    }
+    if(configSource.kind==='local'){
+      preferredCustomSoundMode='local';
+      updateCustomSoundInputDisplay();
+      await setCustomSoundSource(null,{persist:false});
+      return;
+    }
+  }
+  preferredCustomSoundMode=null;
+  await setCustomSoundSource(null,{persist:false});
 }
 
 const terminal=document.getElementById('terminal');
@@ -654,8 +736,9 @@ let typing=false;
 let baseDelay=10;
 let savedUserSpeed=localStorage.getItem('userSpeed');
 let savedCompSpeed=localStorage.getItem('compSpeed');
-let savedCustomSoundDir=localStorage.getItem('customSoundDir');
-let customSoundDir=savedCustomSoundDir!==null?savedCustomSoundDir:'';
+let savedCustomSoundSourceDescriptor=readSavedCustomSoundSource();
+let customSoundSource=null;
+let preferredCustomSoundMode=null;
 let userBaseSpeed=savedUserSpeed!==null?Number(savedUserSpeed):75;
 let compBaseSpeed=savedCompSpeed!==null?Number(savedCompSpeed):90;
 let userSpeed=userBaseSpeed;
@@ -713,6 +796,9 @@ const selectSlider=document.getElementById('select-volume');
 const userSpeedSelect=document.getElementById('user-speed-select');
 const compSpeedSelect=document.getElementById('comp-speed-select');
 const customSoundInput=document.getElementById('custom-sound-dir');
+const customSoundPicker=document.getElementById('custom-sound-picker');
+const customSoundClear=document.getElementById('custom-sound-clear');
+const customSoundNote=document.getElementById('custom-sound-note');
 const builderButton=document.getElementById('builder-button');
 
 prefButton.addEventListener('click',()=>{
@@ -743,15 +829,42 @@ scrollSlider.addEventListener('input',()=>{scrollVolume=scrollSlider.value/100;}
 focusSlider.addEventListener('input',()=>{focusVolume=focusSlider.value/100;});
 selectSlider.addEventListener('input',()=>{selectVolume=selectSlider.value/100;});
 if(customSoundInput){
-  customSoundInput.value=customSoundDir;
+  updateCustomSoundInputDisplay();
   customSoundInput.addEventListener('change',()=>{
-    setCustomSoundDir(customSoundInput.value,{persist:true});
+    if(customSoundInput.disabled) return;
+    setCustomSoundSourceFromInput(customSoundInput.value);
   });
   customSoundInput.addEventListener('keydown',e=>{
     if(e.key==='Enter'){
       e.preventDefault();
       customSoundInput.blur();
+      if(customSoundInput.disabled) return;
+      setCustomSoundSourceFromInput(customSoundInput.value);
     }
+  });
+}else{
+  updateCustomSoundInputDisplay();
+}
+if(customSoundPicker){
+  customSoundPicker.disabled=!('showDirectoryPicker' in window);
+  customSoundPicker.addEventListener('click',async ()=>{
+    if(!('showDirectoryPicker' in window)) return;
+    try{
+      const handle=await window.showDirectoryPicker();
+      if(!handle) return;
+      preferredCustomSoundMode=null;
+      await setCustomSoundSource({kind:'handle',handle,id:CUSTOM_SOUND_HANDLE_KEY});
+    }catch(err){
+      if(err && err.name!=='AbortError'){
+        console.warn('Custom folder selection failed',err);
+      }
+    }
+  });
+}
+if(customSoundClear){
+  customSoundClear.addEventListener('click',async ()=>{
+    preferredCustomSoundMode=null;
+    await setCustomSoundSource(null);
   });
 }
 const focusAudio=preloadAudio('Terminal 3/menu/menu_focus.wav');
@@ -777,6 +890,8 @@ const enterCharAudios=[
 const customAudioCache=new Map();
 let customEnterAudios=[];
 let customSoundLoadToken=0;
+const customLocalSoundLookup=new Map();
+let cleanupCustomSoundSources=null;
 userSpeedSelect.value=String([58,75,91,100].includes(userBaseSpeed)?userBaseSpeed:75);
 compSpeedSelect.value=String([80,90,95,100].includes(compBaseSpeed)?compBaseSpeed:90);
 userSpeedSelect.addEventListener('change',()=>{
@@ -1574,35 +1689,232 @@ function playWordFocusSound(){
   playCachedAudio(audio,focusVolume);
 }
 
-async function setCustomSoundDir(dir,{persist=true}={}){
-  const trimmed=(dir||'').trim();
-  if(persist){
-    if(trimmed){
-      localStorage.setItem('customSoundDir',trimmed);
-      savedCustomSoundDir=trimmed;
+function readSavedCustomSoundSource(){
+  try{
+    const raw=localStorage.getItem(CUSTOM_SOUND_SOURCE_STORAGE_KEY);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      if(parsed && parsed.kind==='url' && typeof parsed.value==='string'){
+        return {kind:'url',value:parsed.value};
+      }
+      if(parsed && parsed.kind==='handle' && typeof parsed.id==='string'){
+        return {kind:'handle',id:parsed.id};
+      }
     }else{
-      localStorage.removeItem('customSoundDir');
-      savedCustomSoundDir=null;
+      const legacy=localStorage.getItem(LEGACY_CUSTOM_SOUND_DIR_KEY);
+      if(legacy!==null){
+        return {kind:'url',value:legacy};
+      }
     }
+  }catch(err){
+    console.warn('Failed to read saved custom sound source',err);
   }
-  customSoundDir=trimmed;
-  if(customSoundInput && customSoundInput.value!==trimmed){
-    customSoundInput.value=trimmed;
-  }
-  await loadCustomSoundClips(trimmed);
+  return null;
 }
 
-async function loadCustomSoundClips(dir){
+async function restoreSavedCustomSoundSource(descriptor){
+  if(!descriptor) return false;
+  if(descriptor.kind==='url' && typeof descriptor.value==='string'){
+    await setCustomSoundSource({kind:'url',url:descriptor.value},{persist:false});
+    return true;
+  }
+  if(descriptor.kind==='handle' && typeof descriptor.id==='string'){
+    const handle=await loadStoredDirectoryHandle(descriptor.id);
+    if(handle && await ensureDirectoryPermission(handle)){
+      await setCustomSoundSource({kind:'handle',handle,id:descriptor.id},{persist:false});
+      return true;
+    }
+    await deleteStoredDirectoryHandle(descriptor.id);
+  }
+  return false;
+}
+
+function updateCustomSoundInputDisplay(){
+  if(!customSoundInput) return;
+  if(customSoundSource && customSoundSource.kind==='handle'){
+    const name=customSoundSource.handle?.name||'Local Folder';
+    customSoundInput.value=`[Local] ${name}`;
+    customSoundInput.disabled=true;
+  }else{
+    const value=customSoundSource && customSoundSource.kind==='url'?customSoundSource.url:'';
+    customSoundInput.disabled=false;
+    customSoundInput.value=value||'';
+  }
+  if(customSoundNote){
+    if(customSoundSource && customSoundSource.kind==='handle'){
+      customSoundNote.textContent='Using a local folder. Browser permission is required to keep access.';
+    }else if(preferredCustomSoundMode==='local'){
+      customSoundNote.textContent='Pick a local folder to load custom enter-key sounds offline.';
+    }else{
+      customSoundNote.textContent='Supports hosted URLs or local folders.';
+    }
+  }
+  if(customSoundPicker){
+    customSoundPicker.disabled=!('showDirectoryPicker' in window);
+  }
+}
+
+async function setCustomSoundSourceFromInput(value){
+  const trimmed=(value||'').trim();
+  preferredCustomSoundMode=null;
+  if(!trimmed){
+    await setCustomSoundSource(null);
+  }else{
+    await setCustomSoundSource({kind:'url',url:trimmed});
+  }
+}
+
+async function setCustomSoundSource(source,{persist=true}={}){
+  let normalized=null;
+  if(source){
+    if(source.kind==='url'){
+      const trimmed=(source.url||source.value||'').trim();
+      if(trimmed){
+        normalized={kind:'url',url:trimmed};
+      }
+    }else if(source.kind==='handle' && source.handle){
+      if(await ensureDirectoryPermission(source.handle)){
+        normalized={kind:'handle',handle:source.handle,id:source.id||CUSTOM_SOUND_HANDLE_KEY};
+      }
+    }
+  }
+  customSoundSource=normalized;
+  updateCustomSoundInputDisplay();
+  if(persist){
+    await persistCustomSoundSource(customSoundSource);
+  }
+  await loadCustomSoundClips(customSoundSource);
+}
+
+async function persistCustomSoundSource(source){
+  try{
+    if(!source){
+      localStorage.removeItem(CUSTOM_SOUND_SOURCE_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_CUSTOM_SOUND_DIR_KEY);
+      await deleteStoredDirectoryHandle(CUSTOM_SOUND_HANDLE_KEY);
+      return;
+    }
+    if(source.kind==='url'){
+      localStorage.setItem(CUSTOM_SOUND_SOURCE_STORAGE_KEY,JSON.stringify({kind:'url',value:source.url}));
+      localStorage.setItem(LEGACY_CUSTOM_SOUND_DIR_KEY,source.url);
+      await deleteStoredDirectoryHandle(CUSTOM_SOUND_HANDLE_KEY);
+      return;
+    }
+    if(source.kind==='handle'){
+      const id=source.id||CUSTOM_SOUND_HANDLE_KEY;
+      localStorage.setItem(CUSTOM_SOUND_SOURCE_STORAGE_KEY,JSON.stringify({kind:'handle',id}));
+      localStorage.removeItem(LEGACY_CUSTOM_SOUND_DIR_KEY);
+      await storeDirectoryHandle(id,source.handle);
+    }
+  }catch(err){
+    console.warn('Failed to persist custom sound source',err);
+  }
+}
+
+async function openDirectoryHandleDb(){
+  if(typeof indexedDB==='undefined') return null;
+  if(!directoryHandleDbPromise){
+    directoryHandleDbPromise=new Promise((resolve,reject)=>{
+      const request=indexedDB.open(CUSTOM_SOUND_DB_NAME,1);
+      request.onupgradeneeded=()=>{
+        try{
+          request.result.createObjectStore(CUSTOM_SOUND_DB_STORE);
+        }catch(_err){/* ignore */}
+      };
+      request.onsuccess=()=>resolve(request.result);
+      request.onerror=()=>reject(request.error);
+    }).catch(err=>{
+      console.warn('Failed to open directory handle database',err);
+      return null;
+    });
+  }
+  return directoryHandleDbPromise;
+}
+
+async function storeDirectoryHandle(id,handle){
+  const db=await openDirectoryHandleDb();
+  if(!db) return;
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(CUSTOM_SOUND_DB_STORE,'readwrite');
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+    tx.objectStore(CUSTOM_SOUND_DB_STORE).put(handle,id);
+  }).catch(err=>{
+    console.warn('Failed to store directory handle',err);
+  });
+}
+
+async function loadStoredDirectoryHandle(id){
+  const db=await openDirectoryHandleDb();
+  if(!db) return null;
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(CUSTOM_SOUND_DB_STORE,'readonly');
+    tx.onerror=()=>reject(tx.error);
+    const request=tx.objectStore(CUSTOM_SOUND_DB_STORE).get(id);
+    request.onsuccess=()=>resolve(request.result||null);
+    request.onerror=()=>reject(request.error);
+  }).catch(err=>{
+    console.warn('Failed to read directory handle',err);
+    return null;
+  });
+}
+
+async function deleteStoredDirectoryHandle(id){
+  const db=await openDirectoryHandleDb();
+  if(!db) return;
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(CUSTOM_SOUND_DB_STORE,'readwrite');
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+    tx.objectStore(CUSTOM_SOUND_DB_STORE).delete(id);
+  }).catch(err=>{
+    console.warn('Failed to delete directory handle',err);
+  });
+}
+
+async function ensureDirectoryPermission(handle){
+  if(!handle || typeof handle.queryPermission!=='function') return true;
+  const opts={mode:'read'};
+  let status;
+  try{
+    status=await handle.queryPermission(opts);
+  }catch(_err){
+    status='prompt';
+  }
+  if(status==='granted') return true;
+  if(typeof handle.requestPermission!=='function') return status!=='denied';
+  try{
+    const requestResult=await handle.requestPermission(opts);
+    return requestResult==='granted';
+  }catch(_err){
+    return false;
+  }
+}
+
+async function loadCustomSoundClips(source){
   customSoundLoadToken++;
   const token=customSoundLoadToken;
+  cleanupCustomSoundSources?.();
+  cleanupCustomSoundSources=null;
   customEnterAudios=[];
-  if(!dir) return;
+  customAudioCache.clear();
+  customLocalSoundLookup.clear();
+  if(!source) return;
   try{
-    const sources=await discoverCustomSoundSources(dir);
-    if(token!==customSoundLoadToken) return;
+    const result=await discoverCustomSoundSources(source);
+    if(token!==customSoundLoadToken){
+      result.cleanup?.();
+      return;
+    }
+    cleanupCustomSoundSources=result.cleanup||null;
+    if(Array.isArray(result.lookupEntries)){
+      for(const entry of result.lookupEntries){
+        registerLocalSoundLookup(entry.path,entry.url);
+      }
+    }
     const audios=[];
     const seen=new Set();
-    for(const src of sources){
+    for(const src of result.sources||[]){
       if(!src || seen.has(src)) continue;
       seen.add(src);
       try{
@@ -1616,9 +1928,35 @@ async function loadCustomSoundClips(dir){
     customEnterAudios=audios;
   }catch(err){
     if(token===customSoundLoadToken){
-      console.warn('Failed to load custom sound directory',dir,err);
+      console.warn('Failed to load custom sound source',source,err);
     }
   }
+}
+
+function registerLocalSoundLookup(path,url){
+  if(!path || !url) return;
+  const normalized=normalizeLocalSoundKey(path);
+  addLocalLookup(normalized,url);
+  const base=normalizeLocalSoundKey(path.split('/').pop()||'');
+  if(base) addLocalLookup(base,url);
+}
+
+function addLocalLookup(key,url){
+  if(!key) return;
+  let list=customLocalSoundLookup.get(key);
+  if(!list){
+    list=[];
+    customLocalSoundLookup.set(key,list);
+  }
+  if(!list.includes(url)) list.push(url);
+}
+
+function normalizeLocalSoundKey(value){
+  return (value||'')
+    .replace(/^[.\\/]+/,'')
+    .replace(/\+/g,'/')
+    .replace(/\/+/g,'/')
+    .toLowerCase();
 }
 
 function removeFailedCustomAudio(src,audio){
@@ -1656,13 +1994,25 @@ function buildSoundCandidates(sound){
     addCandidate(trimmed);
     return candidates;
   }
-  if(customSoundDir){
-    try{
-      const baseUrl=new URL(customSoundDir, window.location.href);
-      addCandidate(new URL(trimmed, baseUrl).href);
-    }catch(_err){
-      const base=customSoundDir.endsWith('/')?customSoundDir:`${customSoundDir}/`;
-      addCandidate(`${base}${trimmed.replace(/^\.?\/+/,'')}`);
+  if(customSoundSource){
+    if(customSoundSource.kind==='url'){
+      try{
+        const baseUrl=new URL(customSoundSource.url,window.location.href);
+        addCandidate(new URL(trimmed,baseUrl).href);
+      }catch(_err){
+        const base=customSoundSource.url.endsWith('/')?customSoundSource.url:`${customSoundSource.url}/`;
+        addCandidate(`${base}${trimmed.replace(/^\.?\/+/,'')}`);
+      }
+    }else if(customSoundSource.kind==='handle'){
+      const normalized=normalizeLocalSoundKey(trimmed);
+      const matches=customLocalSoundLookup.get(normalized);
+      if(matches){
+        matches.forEach(addCandidate);
+      }
+      if(!matches){
+        const alt=customLocalSoundLookup.get(normalizeLocalSoundKey(trimmed.replace(/\\+/g,'/')));
+        if(alt) alt.forEach(addCandidate);
+      }
     }
   }
   addCandidate(trimmed);
@@ -1696,39 +2046,69 @@ function playConfiguredSound(sound,{volume=selectVolume}={}){
   return started;
 }
 
-async function discoverCustomSoundSources(dir){
-  const trimmed=(dir||'').trim();
-  if(!trimmed) return [];
-  const attempts=[trimmed];
-  if(!trimmed.endsWith('/')) attempts.push(`${trimmed}/`);
-  const errors=[];
-  for(const attempt of attempts){
-    try{
-      const res=await fetch(attempt,{cache:'no-store'});
-      if(!res.ok){
-        errors.push(new Error(`HTTP ${res.status} ${res.statusText||''}`.trim()));
-        continue;
+async function discoverCustomSoundSources(source){
+  if(!source) return {sources:[],lookupEntries:[]};
+  if(source.kind==='url'){
+    const trimmed=(source.url||'').trim();
+    if(!trimmed) return {sources:[],lookupEntries:[]};
+    const attempts=[trimmed];
+    if(!trimmed.endsWith('/')) attempts.push(`${trimmed}/`);
+    const errors=[];
+    for(const attempt of attempts){
+      try{
+        const res=await fetch(attempt,{cache:'no-store'});
+        if(!res.ok){
+          errors.push(new Error(`HTTP ${res.status} ${res.statusText||''}`.trim()));
+          continue;
+        }
+        const contentType=res.headers.get('content-type')||'';
+        if(contentType.includes('application/json')){
+          const data=await res.json();
+          return {sources:extractAudioSourcesFromJson(data,res.url),lookupEntries:[]};
+        }
+        const text=await res.text();
+        const sources=extractAudioSourcesFromText(text,res.url);
+        if(sources.length) return {sources,lookupEntries:[]};
+        if(AUDIO_FILE_PATTERN.test(res.url)){
+          return {sources:[res.url],lookupEntries:[]};
+        }
+        return {sources:[],lookupEntries:[]};
+      }catch(err){
+        errors.push(err);
       }
-      const contentType=res.headers.get('content-type')||'';
-      if(contentType.includes('application/json')){
-        const data=await res.json();
-        return extractAudioSourcesFromJson(data,res.url);
-      }
-      const text=await res.text();
-      const sources=extractAudioSourcesFromText(text,res.url);
-      if(sources.length) return sources;
-      if(AUDIO_FILE_PATTERN.test(res.url)){
-        return [res.url];
-      }
-      return [];
-    }catch(err){
-      errors.push(err);
     }
+    if(errors.length){
+      throw errors[errors.length-1];
+    }
+    return {sources:[],lookupEntries:[]};
   }
-  if(errors.length){
-    throw errors[errors.length-1];
+  if(source.kind==='handle' && source.handle){
+    const files=[];
+    const cleanup=[];
+    async function walk(dir,prefix=''){
+      for await (const entry of dir.values()){
+        if(entry.kind==='directory'){
+          await walk(entry,`${prefix}${entry.name}/`);
+        }else if(entry.kind==='file' && AUDIO_FILE_PATTERN.test(entry.name)){
+          try{
+            const file=await entry.getFile();
+            const url=URL.createObjectURL(file);
+            files.push({path:`${prefix}${entry.name}`,url});
+            cleanup.push(url);
+          }catch(err){
+            console.warn('Failed to read custom audio file',entry.name,err);
+          }
+        }
+      }
+    }
+    await walk(source.handle,'');
+    return {
+      sources:files.map(f=>f.url),
+      lookupEntries:files,
+      cleanup:()=>{cleanup.forEach(URL.revokeObjectURL);}
+    };
   }
-  return [];
+  return {sources:[],lookupEntries:[]};
 }
 
 function extractAudioSourcesFromJson(data,baseUrl){
@@ -2209,6 +2589,14 @@ powerButton.addEventListener('click',async()=>{
     hackingData=null;
   }
 });
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('service-worker.js').catch(err=>{
+      console.warn('Service worker registration failed',err);
+    });
+  });
+}
 </script>
 </body>
 </html>
