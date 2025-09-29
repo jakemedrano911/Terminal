@@ -1,0 +1,15 @@
+{
+  "name": "RobCo Termlink",
+  "short_name": "Termlink",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#041204",
+  "theme_color": "#041204",
+  "icons": [
+    {
+      "src": "icons/terminal.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
